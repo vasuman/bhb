@@ -1,4 +1,8 @@
-var can, ctx, hero, joystick, camY = 0, prevT, delT = 0;
+var camY = 0,
+    velY = 0,
+    delT = 0,
+    thrust = -0.008,
+    can, ctx, hero, joystick,  prevT;
 
 // debug -- FIXME remove for final submission
 function resetHero() {
@@ -25,6 +29,20 @@ function impulse(b, imp) {
 }
 
 // draw functions
+function drawBG() {
+    var num = 12,
+        sep = can.height / num,
+        i, y;
+    for(i = 0; i < num; i++) {
+        y = ~~(i * sep - (camY % sep));
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(can.width, y);
+        ctx.stroke();
+        ctx.fillText("" + (y + camY), 10, y);
+    }
+}
+
 function drawCircle(ctx, x, y, size) {
     ctx.beginPath();
     ctx.arc(x, y, size, 0, 2 * Math.PI);
@@ -35,10 +53,14 @@ function drawBox(ctx, x, y, size) {
     ctx.fillRect(x - size / 2, y - size / 2, size, size);
 }
 
+function drawCan(can, x, y) {
+    ctx.drawImage(can, x - can.width / 2, y - can.height / 2);
+}
+
 function preDraw(f) {
     var can = document.createElement('canvas'),
         ctx = can.getContext('2d');
-    f(can, ctx);
+    f(ctx, can);
     return can;
 }
 
@@ -88,7 +110,8 @@ V.prototype = {
     // broken but better
     limit: function(rad) {
         var d = this.r(),
-            rad2 = rad * rad, f;
+            rad2 = rad * rad,
+            f;
         if (d > rad2) {
             f = rad2 / d;
             this.x *= f;
@@ -106,15 +129,25 @@ function Hero() {
 
 Hero.prototype = {
     update: function() {
-        motion(this);
         // if out of viewport break
-        if (this.pos.x < 0 || this.pos.x > 600 || this.pos.y < 0 || this.pos.y > 800) {
+        if (this.pos.x < 0 || this.pos.x > 600 || this.pos.y < camY || this.pos.y > camY + 800) {
             debugger;
         }
+        motion(this);
+        // update camY
+        if (this.vel.y == 0) {
+
+        } else if (this.vel.y < 0) {
+            // camY = Math.min(camY, this.pos.y - can.width / 2);
+            velY = -Math.pow(-this.vel.y, 1.3);
+        } else {
+            velY = Math.pow(this.vel.y, 1.3);
+        }
+        camY = ~~(camY + velY * delT);
     },
     draw: function() {
         ctx.fillStyle = 'black';
-        drawBox(ctx, this.pos.x, this.pos.y - camY, this.size);
+        drawBox(ctx, ~~this.pos.x, ~~(this.pos.y - camY), this.size);
     }
 }
 
@@ -138,8 +171,8 @@ function Joystick() {
 
 Joystick.prototype = {
     draw: function() {
-        drawCanvas(this._wellCan, this.pos.x, this.pos.y)
-        drawCanvas(this._dotCan, this.pos.x + this.dot.x, this.pos.y + this.dot.y, this.dotSize);
+        drawCan(this._wellCan, this.pos.x, this.pos.y);
+        drawCan(this._dotCan, this.pos.x + this.dot.x, this.pos.y + this.dot.y, this.dotSize);
     },
     _touchStart: function(ev) {
         var self = this;
@@ -171,21 +204,23 @@ Joystick.prototype = {
         forEach(ev.changedTouches, function(touch) {
             if (touch.identifier !== self._id) return;
             self._engaged = false;
-            self.dot.scale(-0.005);
-            hero.vel.set(self.dot);
-            hero.acc.y = 0.0003;
+            self.dot.scale(thrust);
+            hero.vel.set(self.dot.x, self.dot.y);
+            //hero.acc.y = 0.0003;
             self.dot.set(0, 0);
         });
     },
     _drawDot: function(ctx, can) {
-        can.height = can.width = this.dotSize + 2;
+        can.height = can.width = 2 * this.dotSize + 2;
         ctx.fillStyle = '#222'
-        var c = this.dotSize / 2  + 1;
+        var c = this.dotSize + 1;
         drawCircle(ctx, c, c, this.dotSize);
     },
     _drawWell: function(ctx, can) {
-        can.height = can.width = this.wellSize + 2;
-        ctx.fillStyle = '#777'
+        can.height = can.width = 2 * this.wellSize + 2;
+        ctx.fillStyle = '#777';
+        var c = this.wellSize + 1;
+        drawCircle(ctx, c, c, this.wellSize);
     },
 }
 
@@ -198,6 +233,7 @@ function tick(now) {
     hero.update();
     // draw things
     ctx.clearRect(0, 0, can.width, can.height);
+    drawBG();
     hero.draw();
     joystick.draw();
     requestAnimationFrame(tick);
