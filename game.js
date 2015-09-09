@@ -1,7 +1,10 @@
 var camY = 0,
     velY = 0,
-    delT = 0,
-    thrust = -0.008,
+    delT = 11,
+    thrust = -0.01,
+    grav = 0.0007,
+    maxVel = 0.9,
+    restoreRate = 0.01,
     can, ctx, hero, joystick,  prevT;
 
 // debug -- FIXME remove for final submission
@@ -30,7 +33,7 @@ function impulse(b, imp) {
 
 // draw functions
 function drawBG() {
-    var num = 12,
+    var num = 10,
         sep = can.height / num,
         i, y;
     for(i = 0; i < num; i++) {
@@ -43,17 +46,26 @@ function drawBG() {
     }
 }
 
-function drawCircle(ctx, x, y, size) {
+function drawCircle(ctx, x, y, size, fill) {
     ctx.beginPath();
     ctx.arc(x, y, size, 0, 2 * Math.PI);
-    ctx.fill();
+    if (fill === true) {
+        ctx.fill();
+    } else {
+        ctx.stroke();
+    }
 }
 
 function drawBox(ctx, x, y, size) {
     ctx.fillRect(x - size / 2, y - size / 2, size, size);
 }
 
-function drawCan(can, x, y) {
+function drawCan(can, x, y, rotate) {
+    if (rotate) {
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+        ctx.drawImage(can, -can.width / 2, -can.height / 2);
+    }
     ctx.drawImage(can, x - can.width / 2, y - can.height / 2);
 }
 
@@ -113,7 +125,7 @@ V.prototype = {
             rad2 = rad * rad,
             f;
         if (d > rad2) {
-            f = rad2 / d;
+            f = rad / Math.sqrt(d);
             this.x *= f;
             this.y *= f;
         }
@@ -125,38 +137,71 @@ function Hero() {
     this.pos = new V();
     this.vel = new V();
     this.acc = new V();
+    this._can = preDraw(this._drawChar.bind(this));
 }
 
 Hero.prototype = {
+    _drawChar: function(ctx, can) {
+        can.width = can.height = this.size;
+        var path = new Path2D('M0 0 v ' + this.size + ' h ' + this.size + ' v ' + -this.size + ' Z');
+        ctx.fill(path);
+    },
     update: function() {
         // if out of viewport break
-        if (this.pos.x < 0 || this.pos.x > 600 || this.pos.y < camY || this.pos.y > camY + 800) {
+        if (this.pos.x < 0 || this.pos.x > can.width || this.pos.y < camY || this.pos.y > camY + can.height) {
             debugger;
+            throw new Exception();
         }
         motion(this);
+        this.vel.limit(maxVel);
         // update camY
-        if (this.vel.y == 0) {
-
-        } else if (this.vel.y < 0) {
-            // camY = Math.min(camY, this.pos.y - can.width / 2);
-            velY = -Math.pow(-this.vel.y, 1.3);
-        } else {
-            velY = Math.pow(this.vel.y, 1.3);
-        }
-        camY = ~~(camY + velY * delT);
+        this._trackCam3();
     },
     draw: function() {
-        ctx.fillStyle = 'black';
-        drawBox(ctx, ~~this.pos.x, ~~(this.pos.y - camY), this.size);
+        drawCan(this._can, this.pos.x, this.pos.y - camY);
+    },
+    _trackCam1: function() {
+        if (this.vel.y !== 0) {
+            if (this.vel.y < 0) {
+                // camY = Math.min(camY, this.pos.y - can.width / 2);
+                velY = -Math.pow(-this.vel.y, 1.3) * (camY + can.height - this.pos.y) * 2 / can.height;
+            } else {
+                velY = Math.pow(this.vel.y, 2);
+            }
+
+        } 
+        camY = ~~(camY + velY * delT);
+    },
+    _trackCam2: function() {
+        camY = ~~Math.min(camY, this.pos.y - can.height / 2);
+    },
+    _trackCam3: function() {
+        if (this.vel.y !== 0) {
+            if (this.vel.y < 0) {
+                velY = -Math.pow(-this.vel.y, 1.3) * (camY + can.height - this.pos.y) * 2 / can.height;
+                camY = ~~(camY + velY * delT);
+            }
+        }
     }
 }
 
+const STICK_ENGAGED = 1,
+    STICK_RESETTING = 2,
+    STICK_FREE = 3;
+
+const DIR_LEFT = 1,
+    DIR_RIGHT = 2;
 function Joystick() {
     this.pos = new V();
     this.dot = new V();
-    this.wellSize = 100;
-    this.dotSize = 50;
-    this._engaged = false;
+    this.wellSize = 90;
+    this.dotSize = 40;
+    this.resetInterval = 1;
+    this._angle = 0;
+    this.direction = DIR_LEFT;
+    this._state = STICK_FREE;
+    this._dotV = new V();
+    this._initTouch = new V();
     this._id = null;
     this._dotR2 = this.dotSize * this.dotSize;
     this._dotCan = preDraw(this._drawDot.bind(this));
@@ -170,67 +215,109 @@ function Joystick() {
 }
 
 Joystick.prototype = {
+    update: function() {
+        switch (this._state) {
+        case STICK_RESETTING:
+            this.dot.scale(this.resetFactor);
+            if (this.dot.r() < 4) {
+                this._state = STICK_FREE;
+                this.dot.set(0, 0);
+            }
+            break;
+        case STICK_RECHARGING:
+            break;
+        }
+    },
     draw: function() {
-        drawCan(this._wellCan, this.pos.x, this.pos.y);
-        drawCan(this._dotCan, this.pos.x + this.dot.x, this.pos.y + this.dot.y, this.dotSize);
+        drawCan(this._wellCan, this.pos.x, this.pos.y, this._angle);
+        drawCan(this._dotCan, this.pos.x + this.dot.x, this.pos.y + this.dot.y);
     },
     _touchStart: function(ev) {
         var self = this;
         forEach(ev.changedTouches, function(touch) {
-            if (self._engaged) return;
+            if (self._state !== STICK_FREE) return;
             // check for collision with dot
             var t = V.fromEvent(touch);
             t.sub(self.pos);
+            self._initTouch.set(t.x, t.y);
             if (t.r() < self._dotR2) {
-                self._engaged = true;
+                self._state = STICK_ENGAGED;
                 self._id = touch.identifier;
             }
         });
     },
     _touchMove: function(ev) {
-        if (!this._engaged) return;
+        if (this._state !== STICK_ENGAGED) return;
         var self = this;
         forEach(ev.changedTouches, function(touch) {
             if (touch.identifier !== self._id) return;
             var t = V.fromEvent(touch);
             t.sub(self.pos);
+            t.sub(self._initTouch);
+            if (self.direction === DIR_LEFT) {
+                self.dot.x = Math.min(0, self.dot.x);
+            } else {
+                self.dot.x = Math.max(0, self.dot.x);
+            }
             self.dot.set(t.x, t.y);
             self.dot.limit(self.wellSize);
         });
     },
     _touchEnd: function(ev) {
-        if (!this._engaged) return;
-        var self = this;
+        if (this._state !== STICK_ENGAGED) return;
+        var self = this,
+            t;
         forEach(ev.changedTouches, function(touch) {
             if (touch.identifier !== self._id) return;
-            self._engaged = false;
-            self.dot.scale(thrust);
-            hero.vel.set(self.dot.x, self.dot.y);
-            //hero.acc.y = 0.0003;
-            self.dot.set(0, 0);
+            self._state = STICK_RESETTING;
+            t = self.dot.i();
+            t.scale(thrust);
+            hero.vel.set(t.x, t.y);
+            hero.acc.y = grav;
+            self._lf = 0;
+            self.direction = (self.direction === DIR_LEFT) ? DIR_RIGHT : DIR_LEFT;
         });
     },
     _drawDot: function(ctx, can) {
-        can.height = can.width = 2 * this.dotSize + 2;
-        ctx.fillStyle = '#222'
-        var c = this.dotSize + 1;
-        drawCircle(ctx, c, c, this.dotSize);
+        var r = this.dotSize, 
+            d = 2 * r,
+            blur = 8,
+            width = 6,
+            offset = blur + width;
+        can.height = can.width = d + offset;
+        ctx.fillStyle = '#55e';
+        ctx.shadowBlur = blur;
+        ctx.lineWidth = width;
+        ctx.shadowColor = '#33a';
+        var c = r + offset / 2;
+        drawCircle(ctx, c, c, r, true);
     },
     _drawWell: function(ctx, can) {
-        can.height = can.width = 2 * this.wellSize + 2;
-        ctx.fillStyle = '#777';
-        var c = this.wellSize + 1;
-        drawCircle(ctx, c, c, this.wellSize);
+        var r = this.wellSize, 
+            d = 2 * r,
+            blur = 10,
+            width = 8,
+            offset = blur + width;
+        can.width = can.height = d + offset;
+        ctx.strokeStyle = '#5e5';
+        ctx.shadowBlur = blur;
+        ctx.lineWidth = width;
+        ctx.shadowColor = '#3a3';
+        var c = this.wellSize + offset / 2;
+        drawCircle(ctx, c, c, r);
     },
 }
 
 function tick(now) {
+    /*
     if (prevT) {
         delT = now - prevT;
     }
     prevT = now;
+    */
     // update things
     hero.update();
+    joystick.update();
     // draw things
     ctx.clearRect(0, 0, can.width, can.height);
     drawBG();
