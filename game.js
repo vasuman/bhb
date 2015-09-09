@@ -1,24 +1,25 @@
 var camY = 0,
     velY = 0,
-    delT = 11,
+    delT = 12,
     thrust = -0.01,
-    grav = 0.0007,
+    grav = 0.002,
     maxVel = 0.9,
-    restoreRate = 0.01,
+    resetDelay = 0.5,
     can, ctx, hero, joystick,  prevT;
 
-// debug -- FIXME remove for final submission
-function resetHero() {
-    hero.pos.set(100, 700);
-    hero.vel.set(0, 0);
-    hero.acc.set(0, 0);
+// util
+function $(id) {
+    return document.getElementById(id);
 }
 
-// util
 function forEach(arr, f) {
     for (var i = 0; i < arr.length; i++) {
         f(arr[i]);
     }
+}
+
+function randRange(start, end) {
+    return Math.random() * (end - start) + start;
 }
 
 // physics functions
@@ -56,17 +57,20 @@ function drawCircle(ctx, x, y, size, fill) {
     }
 }
 
-function drawBox(ctx, x, y, size) {
-    ctx.fillRect(x - size / 2, y - size / 2, size, size);
+function drawBox(ctx, x, y, w, h) {
+    ctx.fillRect(x - w / 2, y - h / 2, w, h);
 }
 
-function drawCan(can, x, y, rotate) {
-    if (rotate) {
+function drawCan(can, x, y, angle) {
+    if (angle) {
+        ctx.save();
         ctx.translate(x, y);
         ctx.rotate(angle);
         ctx.drawImage(can, -can.width / 2, -can.height / 2);
+        ctx.restore();
+    } else {
+        ctx.drawImage(can, x - can.width / 2, y - can.height / 2);
     }
-    ctx.drawImage(can, x - can.width / 2, y - can.height / 2);
 }
 
 function preDraw(f) {
@@ -132,6 +136,75 @@ V.prototype = {
     }
 }
 
+function Box(w, h) {
+    this.pos = new V();
+    this.velY = 0;
+    this.w = w;
+    this.h = h;
+}
+
+Box.prototype = {
+    outOfView: function() {
+        return (this.pos.y - this.h / 2) > camY + can.height;
+    }
+}
+
+function Boxes() {
+    this._bs = [];
+    this.numBoxes = 5;
+    this.numChannels = 6;
+    this._chs = [];
+    this._chSep = can.width / this.numChannels;
+}
+
+Boxes.prototype = {
+    collides: function(pos, w, h) {
+        var c1 = ~~( (pos.x - w / 2) / this._chSep),
+            c2 = ~~( (pos.x + w / 2) / this._chSep),
+            t = this._checkChannel(c1, pos, h);
+        if (t) {
+            return true;
+        }
+        if (c2 !== c1) {
+        }
+    },
+    _checkChannel: function(i, pos, h) {
+        var ch = ch[i];
+    },
+    update: function() {
+        var i, b, x, y, w, h;
+        // clear boxes
+        for(i = this._bs.length - 1; i >= 0; i--) {
+            if(this._bs[i].outOfView()) {
+                this._bs.splice(i, 1);
+            }
+        }
+        // add more boxes
+        for(i = this._bs.length; i < this.numBoxes; i++) {
+            w = randRange(40, 75);
+            h = randRange(60, 85);
+            b = new Box(w, h);
+            this._bs.push(b);
+            // TODO padding
+            x = randRange(w / 2, can.width - w / 2);
+            y = camY - h / 2 - randRange(50, 200);
+            b.pos.set(x, y);
+            b.velY = randRange(0.05, 0.1);
+        }
+        // update existing
+        for(i = 0; i < this._bs.length; i++) {
+            b = this._bs[i];
+            b.pos.y += b.velY * delT;
+            // TODO collision
+        }
+    },
+    draw: function() {
+        this._bs.forEach(function(b) {
+            drawBox(ctx, b.pos.x, b.pos.y - camY, b.w, b.h);
+        });
+    }
+}
+
 function Hero() {
     this.size = 45;
     this.pos = new V();
@@ -169,7 +242,7 @@ Hero.prototype = {
                 velY = Math.pow(this.vel.y, 2);
             }
 
-        } 
+        }
         camY = ~~(camY + velY * delT);
     },
     _trackCam2: function() {
@@ -191,18 +264,20 @@ const STICK_ENGAGED = 1,
 
 const DIR_LEFT = 1,
     DIR_RIGHT = 2;
+
 function Joystick() {
     this.pos = new V();
     this.dot = new V();
     this.wellSize = 90;
     this.dotSize = 40;
-    this.resetInterval = 1;
-    this._angle = 0;
+    this.resetTime = 200;
     this.direction = DIR_LEFT;
-    this._state = STICK_FREE;
+    this.state = STICK_FREE;
+    this._angle = 0;
     this._dotV = new V();
     this._initTouch = new V();
     this._id = null;
+    this._t = 0;
     this._dotR2 = this.dotSize * this.dotSize;
     this._dotCan = preDraw(this._drawDot.bind(this));
     this._wellCan = preDraw(this._drawWell.bind(this));
@@ -216,15 +291,19 @@ function Joystick() {
 
 Joystick.prototype = {
     update: function() {
-        switch (this._state) {
+        var f;
+        switch (this.state) {
         case STICK_RESETTING:
-            this.dot.scale(this.resetFactor);
-            if (this.dot.r() < 4) {
-                this._state = STICK_FREE;
+            this._t += delT;
+            f = this._t / this.resetTime;
+            this.dot.scale(1 - f);
+            this._angle = ((this.direction === DIR_RIGHT) ? -f : (1 - f)) * Math.PI;
+            if (this._t > this.resetTime) {
+                this.state = STICK_FREE;
                 this.dot.set(0, 0);
+                this._t = 0;
+                this._angle = (this.direction === DIR_RIGHT) ? Math.PI : 0;
             }
-            break;
-        case STICK_RECHARGING:
             break;
         }
     },
@@ -235,41 +314,41 @@ Joystick.prototype = {
     _touchStart: function(ev) {
         var self = this;
         forEach(ev.changedTouches, function(touch) {
-            if (self._state !== STICK_FREE) return;
+            if (self.state !== STICK_FREE) return;
             // check for collision with dot
             var t = V.fromEvent(touch);
             t.sub(self.pos);
             self._initTouch.set(t.x, t.y);
             if (t.r() < self._dotR2) {
-                self._state = STICK_ENGAGED;
+                self.state = STICK_ENGAGED;
                 self._id = touch.identifier;
             }
         });
     },
     _touchMove: function(ev) {
-        if (this._state !== STICK_ENGAGED) return;
+        if (this.state !== STICK_ENGAGED) return;
         var self = this;
         forEach(ev.changedTouches, function(touch) {
             if (touch.identifier !== self._id) return;
             var t = V.fromEvent(touch);
             t.sub(self.pos);
             t.sub(self._initTouch);
+            self.dot.set(t.x, t.y);
             if (self.direction === DIR_LEFT) {
                 self.dot.x = Math.min(0, self.dot.x);
             } else {
                 self.dot.x = Math.max(0, self.dot.x);
             }
-            self.dot.set(t.x, t.y);
             self.dot.limit(self.wellSize);
         });
     },
     _touchEnd: function(ev) {
-        if (this._state !== STICK_ENGAGED) return;
+        if (this.state !== STICK_ENGAGED) return;
         var self = this,
             t;
         forEach(ev.changedTouches, function(touch) {
             if (touch.identifier !== self._id) return;
-            self._state = STICK_RESETTING;
+            self.state = STICK_RESETTING;
             t = self.dot.i();
             t.scale(thrust);
             hero.vel.set(t.x, t.y);
@@ -279,7 +358,7 @@ Joystick.prototype = {
         });
     },
     _drawDot: function(ctx, can) {
-        var r = this.dotSize, 
+        var r = this.dotSize,
             d = 2 * r,
             blur = 8,
             width = 6,
@@ -290,52 +369,61 @@ Joystick.prototype = {
         ctx.lineWidth = width;
         ctx.shadowColor = '#33a';
         var c = r + offset / 2;
-        drawCircle(ctx, c, c, r, true);
+        ctx.beginPath();
+        ctx.arc(c, c, r, 0, 2 * Math.PI);
+        ctx.fill();
     },
     _drawWell: function(ctx, can) {
-        var r = this.wellSize, 
+        var r = this.wellSize,
             d = 2 * r,
             blur = 10,
             width = 8,
             offset = blur + width;
         can.width = can.height = d + offset;
+        ctx.fillStyle = '#7f7';
         ctx.strokeStyle = '#5e5';
         ctx.shadowBlur = blur;
         ctx.lineWidth = width;
         ctx.shadowColor = '#3a3';
         var c = this.wellSize + offset / 2;
-        drawCircle(ctx, c, c, r);
+        ctx.beginPath();
+        ctx.arc(c, c, r, Math.PI / 2, -Math.PI / 2);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.globalAlpha = 0.7;
+        ctx.fill();
     },
 }
 
-function tick(now) {
-    /*
-    if (prevT) {
-        delT = now - prevT;
-    }
-    prevT = now;
-    */
+function tick() {
     // update things
+    boxes.update();
     hero.update();
     joystick.update();
     // draw things
     ctx.clearRect(0, 0, can.width, can.height);
     drawBG();
     hero.draw();
+    boxes.draw();
     joystick.draw();
     requestAnimationFrame(tick);
 }
 
+function startGame() {
+    $('start-screen').style.display = 'none';
+    hero.acc.y = grav;
+    tick();
+}
+
 window.onload = function() {
-    // FIXME: WUT??
-    document.body.addEventListener('touchstart', function(e){ e.preventDefault(); });
-    can = document.getElementById('game-canvas');
+    can = $('game-canvas');
     ctx = can.getContext('2d');
+    ctx.font = '14px monospace';
     can.width = 600;
-    can.height = 800;
+    can.height = window.innerHeight;
     hero = new Hero();
-    resetHero();
+    boxes = new Boxes();
     joystick = new Joystick();
-    joystick.pos.set(480, 670);
-    requestAnimationFrame(tick);
+    joystick.pos.set(480, can.height * 0.95 - joystick.wellSize);
+    hero.pos.x = 100;
 }

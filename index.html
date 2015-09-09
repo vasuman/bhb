@@ -1,13 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=0"/>
+    <meta name="viewport" content="width=600, user-scalable=0"/>
     <meta charset="UTF-8">
     <title>Game</title>
     <link href="game.css" rel="stylesheet" />
     <script src="game.js"> </script>
 </head>
 <body>
-    <canvas id="game-canvas"></canvas>
+    <div id="holder">
+        <div id="start-screen">
+            <button onclick="startGame()"> Start </button>
+        </div>
+        <canvas id="game-canvas"></canvas>
+    </div>
 </body>
 </html>

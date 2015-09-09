@@ -6,6 +6,7 @@
 html, body {
     overflow-x: hidden;
     overflow-y: hidden;
+    height: 100%;
 }
 
 body {
@@ -15,4 +16,8 @@ body {
 
 canvas#game-canvas {
     border: 1px solid black;
+}
+
+div#start-screen {
+    height: 100%;
 }
