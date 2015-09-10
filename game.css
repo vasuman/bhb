@@ -20,11 +20,7 @@ body {
     left: 0;
 }
 
-canvas#game-canvas {
-    z-index: 0;
-}
-
-div.screen {
+.screen {
     z-index: 1;
     display: flex;
     width: 100%;
@@ -39,19 +35,11 @@ button {
     background-color:#768d87;
     border-radius:5px;
     border:1px solid #566963;
-    display:inline-block;
-    cursor:pointer;
     color:#ffffff;
     font-size: 3vh;
     padding: 1.5vh;
     font-weight:bold;
-    text-decoration:none;
     text-shadow:0px -1px 0px #2b665e;
-}
-
-button:hover {
-    background:linear-gradient(to bottom, #6c7c7c 5%, #768d87 100%);
-    background-color:#6c7c7c;
 }
 
 button:active {
@@ -59,8 +47,12 @@ button:active {
     top:1px;
 }
 
+#game-screen {
+    z-index: -1;
+}
+
 #end-screen {
-    transition: opacity 0.4s ease;
+    transition: opacity 0.25s ease;
     background-color: rgba(0, 0, 0, 0.7);
 }
 
@@ -79,6 +71,8 @@ button:active {
     font-family: monospace;
 }
 
-button {
-    z-index: 999;
+#hud > #current-score {
+    z-index: 2;
+    font-size: 2.5em;
+    align-self: flex-end;
 }

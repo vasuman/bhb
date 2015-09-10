@@ -1,4 +1,5 @@
 var delT = 7,
+    scoreFactor = 40,
     thrust = -0.01,
     grav = 0.002,
     maxVel = 0.9,
@@ -36,46 +37,6 @@ function motion(b) {
 }
 
 // draw functions
-function drawGrid() {
-    var numX = 22,
-        numY = 30,
-        sepX = ~~(can.width / numX),
-        sepY = ~~(can.height / numY),
-        i, x, y;
-    ctx.strokeStyle =  '#eed8ae';
-    ctx.lineWidth = 1;
-    for(i = 0; i < numX; i++) {
-        x = i * sepX;
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, can.height);
-        ctx.closePath();
-        ctx.stroke();
-    }
-    for(i = 0; i <= numY; i++) {
-        y = i * sepY - camY % sepY;
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(can.width, y);
-        ctx.closePath();
-        ctx.stroke();
-    }
-}
-function drawRuler() {
-    var num = 10,
-        sep = can.height / num,
-        i, y;
-    ctx.fillStyle = 'black';
-    for(i = 0; i < num; i++) {
-        y = ~~(i * sep - (camY % sep));
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(can.width, y);
-        ctx.stroke();
-        ctx.fillText("" + (y + camY), 10, y);
-    }
-}
-
 function drawCircle(ctx, x, y, size, fill) {
     ctx.beginPath();
     ctx.arc(x, y, size, 0, 2 * Math.PI);
@@ -409,18 +370,11 @@ const DIR_LEFT = 1,
     DIR_RIGHT = 2;
 
 function Joystick() {
-    this.pos = new V();
-    this.dot = new V();
     this.wellSize = 90;
     this.dotSize = 40;
     this.resetTime = 200;
-    this.direction = DIR_LEFT;
-    this.state = STICK_FREE;
-    this._angle = 0;
-    this._dotV = new V();
-    this._initTouch = new V();
-    this._id = null;
-    this._t = 0;
+    this.pos = new V();
+    this.reset();
     this._dotR2 = this.dotSize * this.dotSize;
     this._dotCan = preDraw(this._drawDot.bind(this));
     this._wellCan = preDraw(this._drawWell.bind(this));
@@ -433,6 +387,16 @@ function Joystick() {
 }
 
 Joystick.prototype = {
+    reset: function() {
+        this.dot = new V();
+        this.direction = DIR_LEFT;
+        this.state = STICK_FREE;
+        this._angle = 0;
+        this._dotV = new V();
+        this._initTouch = new V();
+        this._id = null;
+        this._t = 0;
+    },
     update: function() {
         var f;
         switch (this.state) {
@@ -499,7 +463,6 @@ Joystick.prototype = {
         hero.impulse(this.dot.i());
         this._lf = 0;
         this.direction = (this.direction === DIR_LEFT) ? DIR_RIGHT : DIR_LEFT;
-        bg.direction = this.direction;
     },
     _drawDot: function(ctx, can) {
         var r = this.dotSize,
@@ -540,77 +503,66 @@ Joystick.prototype = {
 }
 
 function Background() {
-    this.padding = 0;
-    this.disp = 30;
-    this.spotX = 5;
-    this.spotY = 7;
     this.bgColor = '#fffacd';
-    this.spotColor = '#fff';
-    this.spotSize = 5;
-    this.speed = 3;
-    this.direction = DIR_LEFT;
-    this.baseCan = preDraw(this._drawBase.bind(this));
-    this.alpha = 0.7;
-    this._i = 0;
-    this._o = 0;
-    this._buff = [];
-    var i;
-    for(i = 0; i < 2; i++) {
-        this._buff.push(preDraw(this._drawBuff.bind(this)));
-    }
+    this.lineColor = '#eed8ae';
+    this.numX = 22;
+    this.numY = 30; // TODO scale based on resoultion
+    this.sepX = ~~(can.width / this.numX);
+    this.sepY = ~~(can.height / this.numY);
+    this.rulerRes = this.sepY * 5;
+    this.rulerWidth = 70;
+    this.rulerStart = can.height - can.height % this.rulerRes;
+    this.numR = ~~(can.height / this.rulerRes);
+    this.gridCan= preDraw(this._drawGrid.bind(this));
 }
 
 Background.prototype = {
-    _drawBuff: function(ctx, bCan) {
+    _drawGrid: function(ctx, bCan) {
         bCan.width = can.width;
-        bCan.height = can.height;
-    },
-    _drawBase: function(ctx, bCan) {
-        bCan.width = can.width;
-        bCan.height = can.height;
-        ctx.fillStyle = this.bgColor;
-        ctx.fillRect(0, 0, bCan.width, bCan.height);
-        ctx.fillStyle = this.spotColor;
-        var sepX = bCan.width / this.spotX,
-            sepY = bCan.height / this.spotY,
-            i, j, x, y;
-        for(i = 0; i < this.spotX; i++) {
-            for(j = 0; j < this.spotY; j++) {
-                x = i * sepX;
-                y = j * sepY + this.disp * (i % 2);
-                drawBox(ctx, x, y, this.spotSize, this.spotSize);
-            }
+        bCan.height = can.height + this.sepY;
+        var i, x, y;
+        ctx.strokeStyle = this.lineColor;
+        ctx.lineWidth = 1;
+        for(i = 0; i < this.numX; i++) {
+            x = i * this.sepX;
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, bCan.height);
+            ctx.closePath();
+            ctx.stroke();
+        }
+        for(i = 0; i <= this.numY + 1; i++) {
+            y = i * this.sepY;
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(bCan.width, y);
+            ctx.closePath();
+            ctx.stroke();
         }
     },
-    update: function() {
-        if (this.direction === DIR_LEFT) {
-            this._o += this.speed;
-            this._o %= this.baseCan.width;
-        } else {
-            this._o -= this.speed;
-            if (this._o < 0) {
-                this._o += this.baseCan.width;
-            }
-        }
-    },
+    update: function() {},
     draw: function() {
-        var nI = 1 - this._i,
-            pC = this._buff[this._i],
-            nC = this._buff[nI],
-            // investigate: does this impair performance
-            nX = nC.getContext('2d');
-        this._i = nI;
-        nX.clearRect(0, 0, nC.width, nC.height);
-        nX.globalAlpha = 1;
-        nX.drawImage(this.baseCan, this._o, 0, this.baseCan.width - this._o, this.baseCan.height, 0, 0, this.baseCan.width - this._o, this.baseCan.height);
-        nX.drawImage(this.baseCan, 0, 0, this._o, this.baseCan.height, this.baseCan.width - this._o, 0, this._o, this.baseCan.height)
-        nX.globalAlpha = this.alpha;
-        nX.drawImage(pC, 0, 0);
-        ctx.drawImage(nC, 0, 0);
+        ctx.drawImage(this.gridCan, 0, -camY % this.sepY - this.sepY);
+        ctx.fillStyle = 'black';
+        ctx.font = '20px sans-serif';
+        var y, w;
+        for(i = -5; i <= this.numR * 5; i++) {
+            y = ~~(i * this.rulerRes / 5 - (camY % this.rulerRes));
+            w = this.rulerWidth / 2;
+            if (i % 5 == 0) {
+                ctx.fillText("" + (-y -camY + this.rulerStart), 5, y - 2);
+                w = this.rulerWidth; 
+            }
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(w, y);
+            ctx.stroke();
+        }
     }
 }
 
-function updateScore() {
+function updateScore(force) {
+    score = ~~Math.max(score, -hero.pos.y / scoreFactor);
 }
 
 function tick() {
@@ -620,14 +572,13 @@ function tick() {
     hero.update();
     joystick.update();
     bg.update();
+    updateScore();
     // draw things
     ctx.clearRect(0, 0, can.width, can.height);
     bg.draw();
-    drawGrid();
     hero.draw();
     boxes.draw();
     joystick.draw();
-    updateScore();
     var i;
     for(i = ents.length - 1; i >= 0; i--) {
         if (ents[i]._dead) {
@@ -640,26 +591,23 @@ function tick() {
     requestAnimationFrame(tick);
 }
 
-function initGame() {
+function reset() {
     camY = 0;
     velY = 0;
     ents = [];
     score = 0;
-    bg = new Background();
-    hero = new Hero();
     boxes = new Boxes();
-    joystick = new Joystick();
-    joystick.pos.set(480, can.height * 0.95 - joystick.wellSize);
+    hero = new Hero();
     hero.pos.x = 100;
     hero.acc.y = grav;
     running = true;
+    joystick.reset();
     tick();
 }
 
 function startGame() {
     hide($('start-screen'));
-    show($('game-canvas'));
-    initGame();
+    reset();
 }
 
 function endGame() {
@@ -676,14 +624,16 @@ function endGame() {
 function restartGame() {
     hide($('end-screen'));
     show($('game-canvas'));
-    initGame();
+    reset();
 }
 
 window.onload = function() {
-    hide($('game-canvas'));
     hide($('end-screen'));
     can = $('game-canvas');
     ctx = can.getContext('2d');
     can.width = 600;
     can.height = document.documentElement.clientHeight;
+    bg = new Background();
+    joystick = new Joystick();
+    joystick.pos.set(480, can.height * 0.95 - joystick.wellSize);
 }
