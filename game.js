@@ -5,6 +5,7 @@ var camY = 0,
     grav = 0.002,
     maxVel = 0.9,
     resetDelay = 0.5,
+    boxVel = 0.1,
     can, ctx, hero, joystick,  prevT;
 
 // util
@@ -138,70 +139,132 @@ V.prototype = {
 
 function Box(w, h) {
     this.pos = new V();
-    this.velY = 0;
+    this._top = 0;
+    this._left = 0;
     this.w = w;
     this.h = h;
 }
 
 Box.prototype = {
+    update: function() {
+        this.pos.y += boxVel * delT;
+        this._top = this.pos.y - this.h / 2;
+    },
     outOfView: function() {
-        return (this.pos.y - this.h / 2) > camY + can.height;
+        return (this._top) > camY + can.height;
+    },
+    checkCollide: function(top, left, w, h) {
+        return (this._top + this.h < top && this._top < top + h) && (this._left + this.w < left && this._left < left + w);
     }
 }
 
 function Boxes() {
+    var i;
     this._bs = [];
-    this.numBoxes = 5;
-    this.numChannels = 6;
+    this.numBoxes = 0;
+    this.maxBoxes = 7;
+    this.numChannels = 8;
     this._chs = [];
     this._chSep = can.width / this.numChannels;
+    for(i = 0; i < this.numChannels; i++) {
+        this._chs[i] = [];
+    }
 }
 
 Boxes.prototype = {
-    collides: function(pos, w, h) {
-        var c1 = ~~( (pos.x - w / 2) / this._chSep),
-            c2 = ~~( (pos.x + w / 2) / this._chSep),
-            t = this._checkChannel(c1, pos, h);
-        if (t) {
+    collides: function(top, left, w, h) {
+        var c1 = ~~( (left) / this._chSep),
+            c2 = ~~( (left + w) / this._chSep);
+        if (this._checkChannel(c1, top, left, w, h)) {
             return true;
         }
         if (c2 !== c1) {
-        }
-    },
-    _checkChannel: function(i, pos, h) {
-        var ch = ch[i];
-    },
-    update: function() {
-        var i, b, x, y, w, h;
-        // clear boxes
-        for(i = this._bs.length - 1; i >= 0; i--) {
-            if(this._bs[i].outOfView()) {
-                this._bs.splice(i, 1);
+            if (this._checkChannel(c2, top, left, w, h)) {
+                return true;
             }
         }
-        // add more boxes
-        for(i = this._bs.length; i < this.numBoxes; i++) {
-            w = randRange(40, 75);
-            h = randRange(60, 85);
-            b = new Box(w, h);
-            this._bs.push(b);
-            // TODO padding
-            x = randRange(w / 2, can.width - w / 2);
-            y = camY - h / 2 - randRange(50, 200);
-            b.pos.set(x, y);
-            b.velY = randRange(0.05, 0.1);
+        return false;
+    },
+    _checkChannel: function(i, top, left, w, h) {
+        var ch = this._chs[i],
+            j, b;
+        for(j = 0; j < ch.length; j++) {
+            b = ch[j];
+            if (b.checkCollide(top, left, w, h)) {
+                return true;
+            }
         }
-        // update existing
-        for(i = 0; i < this._bs.length; i++) {
-            b = this._bs[i];
-            b.pos.y += b.velY * delT;
-            // TODO collision
+        return false;
+    },
+    _spawnBox: function(c) {
+        var b, w, h, sp;
+        w = ~~randRange(this._chSep / 2, this._chSep * 3 / 4);
+        h = ~~randRange(70, 90);
+        b = new Box(w, h);
+        sp = this._chSep - w;
+        b.pos.x = this._chSep * c + randRange(0, sp - 2);
+        b.pos.y = camY - h - randRange(30, 60);
+        b._top = b.pos.y - h / 2;
+        b._left = b.pos.x - w / 2;
+        if (this._checkChannel(c, b._top, b._left, w, h)) {
+            // retry
+            return;
+        }
+        this._chs[c].push(b);
+        this.numBoxes += 1;
+    },
+    update: function() {
+        var i, j, b, ch, st, hc;
+        for(i = 0; i < this.numChannels; i++) {
+            c = this._chs[i];
+            for(j = c.length - 1; j >= 0; j--) {
+                // update existing
+                c[j].update();
+                // clear boxes
+                if (c[j].outOfView()) {
+                    c.splice(j, 1);
+                    this.numBoxes -= 1;
+                }
+            }
+        }
+        for(i = this._bs.length - 1; i >= 0; i--) {
+            if(this._bs[i].outOfView()) {
+            }
+        }
+        // check for collision
+        // add more boxes
+        if (this.numBoxes > this.maxBoxes) {
+            return;
+        }
+        st = ~~randRange(0, 10);
+        hc = ~~(hero.pos.x / this._chSep);
+        // spawn strategies
+        if (st < 2) {
+            // same channel as player
+            this._spawnBox(hc);
+        } else if (st < 4) {
+            // in two adjacent channels
+            if (hc > 0) {
+                this._spawnBox(hc - 1);
+            }
+            if (hc < this.numChannels - 1) {
+                this._spawnBox(hc + 1);
+            }
+        } else {
+            // randomly pick a channel
+            this._spawnBox(~~randRange(0, this.numChannels - 1));
         }
     },
     draw: function() {
-        this._bs.forEach(function(b) {
-            drawBox(ctx, b.pos.x, b.pos.y - camY, b.w, b.h);
-        });
+        var i, j, c, b;
+        for(i = 0; i < this.numChannels; i++) {
+            c = this._chs[i];
+            for(j = c.length - 1; j >= 0; j--) {
+                // update existing
+                b = c[j];
+                drawBox(ctx, b.pos.x, b.pos.y, b.w, b.h);
+            }
+        }
     }
 }
 
@@ -220,15 +283,19 @@ Hero.prototype = {
         ctx.fill(path);
     },
     update: function() {
+        motion(this);
+        this.vel.limit(maxVel);
+        // update camY
+        this._trackCam3();
         // if out of viewport break
         if (this.pos.x < 0 || this.pos.x > can.width || this.pos.y < camY || this.pos.y > camY + can.height) {
             debugger;
             throw new Exception();
         }
-        motion(this);
-        this.vel.limit(maxVel);
-        // update camY
-        this._trackCam3();
+        if (boxes.collides(this.pos.y - this.size / 2, this.pos.x - this.size / 2, this.size, this.size)) {
+            debugger;
+            throw new Exception();
+        }
     },
     draw: function() {
         drawCan(this._can, this.pos.x, this.pos.y - camY);
