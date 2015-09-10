@@ -1,16 +1,22 @@
-var camY = 0,
-    velY = 0,
-    delT = 12,
+var delT = 9,
     thrust = -0.01,
     grav = 0.002,
     maxVel = 0.9,
     resetDelay = 0.5,
     boxVel = 0.1,
-    can, ctx, hero, joystick,  prevT;
+    camY, velY, running, can, ctx, hero, joystick,  prevT;
 
 // util
 function $(id) {
     return document.getElementById(id);
+}
+
+function hide(e) {
+    e.style.display = 'none';
+}
+
+function show(e) {
+    e.style.display = '';
 }
 
 function forEach(arr, f) {
@@ -38,6 +44,7 @@ function drawBG() {
     var num = 10,
         sep = can.height / num,
         i, y;
+    ctx.fillStyle = 'black';
     for(i = 0; i < num; i++) {
         y = ~~(i * sep - (camY % sep));
         ctx.beginPath();
@@ -154,7 +161,7 @@ Box.prototype = {
         return (this._top) > camY + can.height;
     },
     checkCollide: function(top, left, w, h) {
-        return (this._top + this.h < top && this._top < top + h) && (this._left + this.w < left && this._left < left + w);
+        return (this._top + this.h > top && this._top < top + h) && (this._left + this.w > left && this._left < left + w);
     }
 }
 
@@ -163,7 +170,9 @@ function Boxes() {
     this._bs = [];
     this.numBoxes = 0;
     this.maxBoxes = 7;
-    this.numChannels = 8;
+    this.baseDelay = 1000;
+    this.numChannels = 6;
+    this._t = 0;
     this._chs = [];
     this._chSep = can.width / this.numChannels;
     for(i = 0; i < this.numChannels; i++) {
@@ -186,6 +195,7 @@ Boxes.prototype = {
         return false;
     },
     _checkChannel: function(i, top, left, w, h) {
+        if (i < 0 || i >= this._chs.length) return false;
         var ch = this._chs[i],
             j, b;
         for(j = 0; j < ch.length; j++) {
@@ -199,22 +209,23 @@ Boxes.prototype = {
     _spawnBox: function(c) {
         var b, w, h, sp;
         w = ~~randRange(this._chSep / 2, this._chSep * 3 / 4);
-        h = ~~randRange(70, 90);
+        h = ~~randRange(70, 140);
         b = new Box(w, h);
         sp = this._chSep - w;
-        b.pos.x = this._chSep * c + randRange(0, sp - 2);
+        b.pos.x = this._chSep * c + randRange(0, sp - 2) + w / 2;
         b.pos.y = camY - h - randRange(30, 60);
         b._top = b.pos.y - h / 2;
         b._left = b.pos.x - w / 2;
         if (this._checkChannel(c, b._top, b._left, w, h)) {
             // retry
+            this._trySpawn();
             return;
         }
         this._chs[c].push(b);
         this.numBoxes += 1;
     },
     update: function() {
-        var i, j, b, ch, st, hc;
+        var i, j, b, ch;
         for(i = 0; i < this.numChannels; i++) {
             c = this._chs[i];
             for(j = c.length - 1; j >= 0; j--) {
@@ -233,11 +244,30 @@ Boxes.prototype = {
         }
         // check for collision
         // add more boxes
-        if (this.numBoxes > this.maxBoxes) {
-            return;
+        this._t += delT;
+        if (this._t > this.baseDelay) {
+            this._t = 0;
+            if (this.numBoxes > this.maxBoxes) {
+                return;
+            }
+            this._trySpawn();
         }
-        st = ~~randRange(0, 10);
-        hc = ~~(hero.pos.x / this._chSep);
+    },
+    draw: function() {
+        var i, j, c, b;
+        ctx.fillStyle = 'red';
+        for(i = 0; i < this.numChannels; i++) {
+            c = this._chs[i];
+            for(j = c.length - 1; j >= 0; j--) {
+                // update existing
+                b = c[j];
+                drawBox(ctx, b.pos.x, b.pos.y - camY, b.w, b.h);
+            }
+        }
+    },
+    _trySpawn: function() {
+        var st = ~~randRange(0, 10),
+            hc = ~~(hero.pos.x / this._chSep);
         // spawn strategies
         if (st < 2) {
             // same channel as player
@@ -253,17 +283,6 @@ Boxes.prototype = {
         } else {
             // randomly pick a channel
             this._spawnBox(~~randRange(0, this.numChannels - 1));
-        }
-    },
-    draw: function() {
-        var i, j, c, b;
-        for(i = 0; i < this.numChannels; i++) {
-            c = this._chs[i];
-            for(j = c.length - 1; j >= 0; j--) {
-                // update existing
-                b = c[j];
-                drawBox(ctx, b.pos.x, b.pos.y, b.w, b.h);
-            }
         }
     }
 }
@@ -283,19 +302,19 @@ Hero.prototype = {
         ctx.fill(path);
     },
     update: function() {
+        // if out of viewport break
+        if (this.pos.x < 0 || this.pos.x > can.width || this.pos.y < camY || this.pos.y > camY + can.height) {
+            endGame();
+            return;
+        }
+        if (boxes.collides(this.pos.y - this.size / 2, this.pos.x - this.size / 2, this.size, this.size)) {
+            endGame();
+            return;
+        }
         motion(this);
         this.vel.limit(maxVel);
         // update camY
         this._trackCam3();
-        // if out of viewport break
-        if (this.pos.x < 0 || this.pos.x > can.width || this.pos.y < camY || this.pos.y > camY + can.height) {
-            debugger;
-            throw new Exception();
-        }
-        if (boxes.collides(this.pos.y - this.size / 2, this.pos.x - this.size / 2, this.size, this.size)) {
-            debugger;
-            throw new Exception();
-        }
     },
     draw: function() {
         drawCan(this._can, this.pos.x, this.pos.y - camY);
@@ -463,6 +482,7 @@ Joystick.prototype = {
 }
 
 function tick() {
+    if (!running) return;
     // update things
     boxes.update();
     hero.update();
@@ -476,21 +496,42 @@ function tick() {
     requestAnimationFrame(tick);
 }
 
-function startGame() {
-    $('start-screen').style.display = 'none';
-    hero.acc.y = grav;
-    tick();
-}
-
-window.onload = function() {
-    can = $('game-canvas');
-    ctx = can.getContext('2d');
-    ctx.font = '14px monospace';
-    can.width = 600;
-    can.height = window.innerHeight;
+function initGame() {
     hero = new Hero();
     boxes = new Boxes();
     joystick = new Joystick();
     joystick.pos.set(480, can.height * 0.95 - joystick.wellSize);
     hero.pos.x = 100;
+    hero.acc.y = grav;
+    camY = 0;
+    running = true;
+    tick();
+}
+
+function startGame() {
+    hide($('start-screen'));
+    show($('game-canvas'));
+    initGame();
+}
+
+function endGame() {
+    hide($('game-canvas'));
+    show($('end-screen'));
+    $('player-score').innerText = -camY;
+    running = false;
+}
+
+function restartGame() {
+    hide($('end-screen'));
+    show($('game-canvas'));
+    initGame();
+}
+
+window.onload = function() {
+    hide($('game-canvas'));
+    hide($('end-screen'));
+    can = $('game-canvas');
+    ctx = can.getContext('2d');
+    can.width = 600;
+    can.height = window.innerHeight;
 }

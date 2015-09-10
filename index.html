@@ -9,10 +9,14 @@
 </head>
 <body>
     <div id="holder">
-        <div id="start-screen">
+        <div class="overlay screen" id="start-screen">
             <button onclick="startGame()"> Start </button>
         </div>
-        <canvas id="game-canvas"></canvas>
+        <canvas class="overlay" id="game-canvas"></canvas>
+        <div class="overlay screen" id="end-screen">
+            <div class="message"> Game Over. Your score <span id="player-score">0</span> </div>
+            <button onclick="restartGame()"> Restart </button>
+        </div>
     </div>
 </body>
 </html>
