@@ -1,10 +1,10 @@
-var delT = 9,
+var delT = 7,
     thrust = -0.01,
     grav = 0.002,
     maxVel = 0.9,
     resetDelay = 0.5,
     boxVel = 0.1,
-    camY, velY, running, can, ctx, hero, joystick, bg, prevT;
+    ents, score, camY, velY, running, can, ctx, hero, joystick, bg;
 
 // util
 function $(id) {
@@ -35,11 +35,32 @@ function motion(b) {
     b.pos.fAdd(delT, b.vel);
 }
 
-function impulse(b, imp) {
-    b.vel.add(imp);
-}
-
 // draw functions
+function drawGrid() {
+    var numX = 22,
+        numY = 30,
+        sepX = ~~(can.width / numX),
+        sepY = ~~(can.height / numY),
+        i, x, y;
+    ctx.strokeStyle =  '#eed8ae';
+    ctx.lineWidth = 1;
+    for(i = 0; i < numX; i++) {
+        x = i * sepX;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, can.height);
+        ctx.closePath();
+        ctx.stroke();
+    }
+    for(i = 0; i <= numY; i++) {
+        y = i * sepY - camY % sepY;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(can.width, y);
+        ctx.closePath();
+        ctx.stroke();
+    }
+}
 function drawRuler() {
     var num = 10,
         sep = can.height / num,
@@ -123,6 +144,11 @@ V.prototype = {
         this.y = y;
     },
 
+    rotate: function(angle) {
+        this.x = this.x * Math.cos(angle) - this.y * Math.sin(angle);
+        this.y = this.x * Math.sin(angle) + this.y * Math.cos(angle);
+    },
+
     i: function() {
         return new V(this.x, this.y);
     },
@@ -150,9 +176,30 @@ function Box(w, h) {
     this._left = 0;
     this.w = w;
     this.h = h;
+    this.can = preDraw(this._drawBox.bind(this));
 }
 
 Box.prototype = {
+    _drawBox: function(ctx, can) {
+        var padX = 5,
+            padY = 5;
+        can.width = this.w + 2 * padX;
+        can.height = this.h + 2 * padY;
+        ctx.globalAlpha = 0.8;
+        ctx.fillStyle = '#e55';
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = '#f99';
+        ctx.shadowSize = 10;
+        ctx.shadowColor = 'red';
+        ctx.beginPath();
+        ctx.moveTo(padX, padY);
+        ctx.lineTo(padX + this.w, padY);
+        ctx.lineTo(padX + this.w, padY + this.h);
+        ctx.lineTo(padX, padY + this.h);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+    },
     update: function() {
         this.pos.y += boxVel * delT;
         this._top = this.pos.y - this.h / 2;
@@ -162,7 +209,7 @@ Box.prototype = {
     },
     checkCollide: function(top, left, w, h) {
         return (this._top + this.h > top && this._top < top + h) && (this._left + this.w > left && this._left < left + w);
-    }
+    },
 }
 
 function Boxes() {
@@ -255,13 +302,12 @@ Boxes.prototype = {
     },
     draw: function() {
         var i, j, c, b;
-        ctx.fillStyle = 'red';
         for(i = 0; i < this.numChannels; i++) {
             c = this._chs[i];
             for(j = c.length - 1; j >= 0; j--) {
                 // update existing
                 b = c[j];
-                drawBox(ctx, b.pos.x, b.pos.y - camY, b.w, b.h);
+                drawCan(b.can, b.pos.x, b.pos.y - camY);
             }
         }
     },
@@ -298,8 +344,14 @@ function Hero() {
 Hero.prototype = {
     _drawChar: function(ctx, can) {
         can.width = can.height = this.size;
-        var path = new Path2D('M0 0 v ' + this.size + ' h ' + this.size + ' v ' + -this.size + ' Z');
-        ctx.fill(path);
+        ctx.fillStyle = 'black';
+        ctx.beginPath();
+        ctx.moveTo(this.size / 2, 0);
+        ctx.lineTo(this.size, this.size / 2);
+        ctx.lineTo(this.size / 2, this.size);
+        ctx.arc(this.size / 2, this.size / 2, this.size / 2, Math.PI / 2, -Math.PI / 2);
+        ctx.closePath();
+        ctx.fill();
     },
     update: function() {
         // if out of viewport break
@@ -317,7 +369,13 @@ Hero.prototype = {
         this._trackCam3();
     },
     draw: function() {
-        drawCan(this._can, this.pos.x, this.pos.y - camY);
+        drawCan(this._can, this.pos.x, this.pos.y - camY, joystick._angle);
+    },
+    impulse: function(vec) {
+        vec.scale(thrust);
+        hero.vel.set(vec.x, vec.y);
+        hero.acc.y = grav;
+        vec.scale(-1);
     },
     _trackCam1: function() {
         if (this.vel.y !== 0) {
@@ -438,10 +496,7 @@ Joystick.prototype = {
     },
     _release: function() {
         this.state = STICK_RESETTING;
-        t = this.dot.i();
-        t.scale(thrust);
-        hero.vel.set(t.x, t.y);
-        hero.acc.y = grav;
+        hero.impulse(this.dot.i());
         this._lf = 0;
         this.direction = (this.direction === DIR_LEFT) ? DIR_RIGHT : DIR_LEFT;
         bg.direction = this.direction;
@@ -487,11 +542,10 @@ Joystick.prototype = {
 function Background() {
     this.padding = 0;
     this.disp = 30;
-    this.spotX = 18;
-    this.spotY = 20;
-    this.numSpots = 40;
-    this.bgColor = '#555';
-    this.spotColor = 'white';
+    this.spotX = 5;
+    this.spotY = 7;
+    this.bgColor = '#fffacd';
+    this.spotColor = '#fff';
     this.spotSize = 5;
     this.speed = 3;
     this.direction = DIR_LEFT;
@@ -522,8 +576,8 @@ Background.prototype = {
             i, j, x, y;
         for(i = 0; i < this.spotX; i++) {
             for(j = 0; j < this.spotY; j++) {
-                x = i * sepX + randRange(1, 2 * this.disp) - this.disp;
-                y = j * sepY + randRange(1, 2 * this.disp) - this.disp;
+                x = i * sepX;
+                y = j * sepY + this.disp * (i % 2);
                 drawBox(ctx, x, y, this.spotSize, this.spotSize);
             }
         }
@@ -545,9 +599,9 @@ Background.prototype = {
             nC = this._buff[nI],
             // investigate: does this impair performance
             nX = nC.getContext('2d');
-        this._i = nI; 
-        nX.globalAlpha = 1;
+        this._i = nI;
         nX.clearRect(0, 0, nC.width, nC.height);
+        nX.globalAlpha = 1;
         nX.drawImage(this.baseCan, this._o, 0, this.baseCan.width - this._o, this.baseCan.height, 0, 0, this.baseCan.width - this._o, this.baseCan.height);
         nX.drawImage(this.baseCan, 0, 0, this._o, this.baseCan.height, this.baseCan.width - this._o, 0, this._o, this.baseCan.height)
         nX.globalAlpha = this.alpha;
@@ -556,6 +610,8 @@ Background.prototype = {
     }
 }
 
+function updateScore() {
+}
 
 function tick() {
     if (!running) return;
@@ -567,14 +623,28 @@ function tick() {
     // draw things
     ctx.clearRect(0, 0, can.width, can.height);
     bg.draw();
-    drawRuler();
+    drawGrid();
     hero.draw();
     boxes.draw();
     joystick.draw();
+    updateScore();
+    var i;
+    for(i = ents.length - 1; i >= 0; i--) {
+        if (ents[i]._dead) {
+            ents.splice(i, 1);
+            continue;
+        }
+        ents[i].update();
+        ents[i].draw();
+    }
     requestAnimationFrame(tick);
 }
 
 function initGame() {
+    camY = 0;
+    velY = 0;
+    ents = [];
+    score = 0;
     bg = new Background();
     hero = new Hero();
     boxes = new Boxes();
@@ -582,7 +652,6 @@ function initGame() {
     joystick.pos.set(480, can.height * 0.95 - joystick.wellSize);
     hero.pos.x = 100;
     hero.acc.y = grav;
-    camY = 0;
     running = true;
     tick();
 }
@@ -594,9 +663,13 @@ function startGame() {
 }
 
 function endGame() {
-    hide($('game-canvas'));
-    show($('end-screen'));
-    $('player-score').innerText = -camY;
+    var eS = $('end-screen');
+    show(eS);
+    eS.style.opacity = 0;
+    setTimeout(function() {
+        eS.style.opacity = 1;
+    }, 0);
+    $('end-score').innerText = score;
     running = false;
 }
 
