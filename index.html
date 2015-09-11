@@ -10,13 +10,21 @@
 <body>
     <div id="holder">
         <div class="overlay screen" id="start-screen">
-            <button class="myButton" onclick="startGame()"> Start </button>
+            <div class="title"> bhb </div>
+            <button onclick="startGame(false)"> ▶ </button>
+            <button onclick="startGame(true)"> ? </button>
         </div>
         <canvas class="overlay" id="game-canvas"></canvas>
         <div class="overlay screen" id="end-screen">
-            <div class="title"> Game Over </div>
-            <div class="message"> <span id="end-score">0</span> points </div>
-            <button onclick="restartGame()"> Restart </button>
+            <div class="title"> game over </div>
+            <div class="stats-info">
+                <div> score <span class="stats" id="end-score">0</span> </div>
+                <div> highscore <span class="stats" id="end-highscore">0</span> </div>
+            </div>
+            <div class="actions">
+                <button onclick="backToMenu()"> ⬅ </button>
+                <button onclick="restartGame()"> ⟲ </button>
+            </div>
         </div>
     </div>
 </body>

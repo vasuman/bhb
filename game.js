@@ -5,11 +5,58 @@ var delT = 7,
     maxVel = 0.9,
     resetDelay = 0.5,
     boxVel = 0.1,
-    ents, score, camY, velY, running, can, ctx, hero, joystick, bg;
+    highscore = 0,
+    currentScreen, tutorial, ents, score, camY, velY, running, can, ctx, hero, joystick, bg;
+
+const TUT_INTRO = 0,
+    TUT_GRAB = 1,
+    TUT_RELEASE = 2,
+    TUT_REVERSE = 3,
+    TUT_AVOID = 4;
+
+function Tutorial() {
+    this._state = TUT_INTRO;
+    this._delTV = 0.01;
+    delT = 0;
+}
+
+tx1 = 0; ty1 = 0;
+tx2 = 0; ty2 = 0;
+tx3 = 0; ty3 = 0;
+Tutorial.prototype = {
+    update: function() {
+    },
+    draw: function() {
+        switch (this._state) {
+            case TUT_INTRO:
+                ctx.fillText('welcome to bhb', tx1, ty1);
+                ctx.fillText('grab the ', tx2, tx2);
+                ctx.fillText('blue dot', tx3, tx3);
+                break;
+        }
+    },
+    dotTouchCallback: function() {
+    },
+    dotReleaseCallback: function() {
+    },
+    end: function() {
+        tutorial = null;
+    }
+}
 
 // util
 function $(id) {
     return document.getElementById(id);
+}
+
+function resetScreen(s) {
+    hide(s);
+}
+
+function transition(nextScreen) {
+    hide(currentScreen);
+    show(nextScreen);
+    currentScreen = nextScreen;
 }
 
 function hide(e) {
@@ -47,15 +94,20 @@ function drawCircle(ctx, x, y, size, fill) {
     }
 }
 
+function drawText(txt, x, y) {
+    ctx.textAlign = 'center';
+    ctx.fillText(txt, x, y);
+}
+
 function drawBox(ctx, x, y, w, h) {
     ctx.fillRect(x - w / 2, y - h / 2, w, h);
 }
 
-function drawCan(can, x, y, angle) {
-    if (angle) {
+function drawCan(can, x, y, theta) {
+    if (theta) {
         ctx.save();
         ctx.translate(x, y);
-        ctx.rotate(angle);
+        ctx.rotate(theta);
         ctx.drawImage(can, -can.width / 2, -can.height / 2);
         ctx.restore();
     } else {
@@ -105,9 +157,15 @@ V.prototype = {
         this.y = y;
     },
 
+    angle: function() {
+        return Math.atan2(this.y, this.x);
+    },
+
     rotate: function(angle) {
-        this.x = this.x * Math.cos(angle) - this.y * Math.sin(angle);
-        this.y = this.x * Math.sin(angle) + this.y * Math.cos(angle);
+        var x = this.x,
+            y = this.y;
+        this.x = x * Math.cos(angle) - y * Math.sin(angle);
+        this.y = x * Math.sin(angle) + y * Math.cos(angle);
     },
 
     i: function() {
@@ -176,6 +234,7 @@ Box.prototype = {
 function Boxes() {
     var i;
     this._bs = [];
+    this.difficultyLevel = 1;
     this.numBoxes = 0;
     this.maxBoxes = 7;
     this.baseDelay = 1000;
@@ -253,7 +312,7 @@ Boxes.prototype = {
         // check for collision
         // add more boxes
         this._t += delT;
-        if (this._t > this.baseDelay) {
+        if (this._t > this.baseDelay && !hero._dead) {
             this._t = 0;
             if (this.numBoxes > this.maxBoxes) {
                 return;
@@ -276,10 +335,10 @@ Boxes.prototype = {
         var st = ~~randRange(0, 10),
             hc = ~~(hero.pos.x / this._chSep);
         // spawn strategies
-        if (st < 2) {
+        if (st < 3) {
             // same channel as player
             this._spawnBox(hc);
-        } else if (st < 4) {
+        } else if (st < 5) {
             // in two adjacent channels
             if (hc > 0) {
                 this._spawnBox(hc - 1);
@@ -294,15 +353,49 @@ Boxes.prototype = {
     }
 }
 
+function Fragment(pos, vec) {
+    this.alpha = 1;
+    this.size = 30;
+    this.speed = 0.55;
+    this.pos = pos;
+    this.vec = vec;
+    this.vec.limit(this.speed);
+    this.can = preDraw(this._drawCan.bind(this));
+    this._t = 0;
+}
+
+Fragment.prototype = {
+    _drawCan: function(ctx, can) {
+        can.width = can.height = this.size * 2;
+        ctx.beginPath();
+        ctx.arc(this.size, this.size, this.size, 0, 2 * Math.PI);
+        ctx.closePath();
+        ctx.fill();
+    },
+    update: function() {
+        this._t += delT;
+        this.alpha *= 0.87;
+    },
+    draw: function() {
+        ctx.save();
+        //ctx.globalAlpha = this.alpha;
+        ctx.translate(this.pos.x + this.vec.x * this._t, this.pos.y + this.vec.y * this._t - camY);
+        ctx.scale(this.alpha, this.alpha);
+        ctx.drawImage(this.can, -this.can.width / 2, -this.can.height / 2)
+        ctx.restore();
+    }
+}
+
 function Hero() {
     this.size = 45;
     this.pos = new V();
     this.vel = new V();
     this.acc = new V();
-    this.numFragments = 10;
+    this.numFragments = 8;
+    this.explodeTime = 250;
     this._can = preDraw(this._drawChar.bind(this));
-    this._dead = true;
-    this._ps = [];
+    this._dead = false;
+    this._fs = [];
 }
 
 Hero.prototype = {
@@ -310,6 +403,8 @@ Hero.prototype = {
         var size = ~~(this.size * 1.4);
         can.width = can.height = size;
         ctx.fillStyle = 'black';
+        ctx.shadowColor = '#333';
+        ctx.shadowSize = 100;
         ctx.beginPath();
         ctx.moveTo(size / 2, 0);
         ctx.lineTo(size, size / 2);
@@ -317,9 +412,20 @@ Hero.prototype = {
         ctx.lineTo(0, size / 2);
         ctx.closePath();
         ctx.fill();
+        ctx.stroke();
     },
     update: function() {
+        motion(this);
+        this.vel.limit(maxVel);
         if (this._dead) {
+            if (this.explodeTime < 0) {
+                endGame();
+                return;
+            }
+            this.explodeTime -= delT;
+            this._fs.forEach(function(f) {
+                f.update();
+            });
             return;
         }
         // if out of viewport break
@@ -333,16 +439,28 @@ Hero.prototype = {
             this.explode();
             return;
         }
-        motion(this);
-        this.vel.limit(maxVel);
         // update camY
         this._trackCam3();
     },
     draw: function() {
+        if (this._dead) {
+            this._fs.forEach(function(f) {
+                f.draw();
+            });
+            return;
+        }
         drawCan(this._can, this.pos.x, this.pos.y - camY, joystick._angle);
     },
     explode: function() {
         this._dead = true;
+        var ang = new V(1, 0),
+            angSep = 2 * Math.PI / this.numFragments,
+            vec, i;
+        for(i = 0; i < this.numFragments; i++) {
+            vec = ang.i();
+            ang.rotate(angSep);
+            this._fs.push(new Fragment(this.pos.i(), vec, angSep, this.pos));
+        }
     },
     impulse: function(vec) {
         vec.scale(thrust);
@@ -534,6 +652,8 @@ Background.prototype = {
         bCan.width = can.width;
         bCan.height = can.height + this.sepY;
         var i, x, y;
+        ctx.fillStyle = this.bgColor;
+        ctx.fillRect(0, 0, bCan.width, bCan.height);
         ctx.strokeStyle = this.lineColor;
         ctx.lineWidth = 1;
         for(i = 0; i < this.numX; i++) {
@@ -558,6 +678,7 @@ Background.prototype = {
         ctx.drawImage(this.gridCan, 0, -camY % this.sepY - this.sepY);
         ctx.fillStyle = 'black';
         ctx.font = '20px sans-serif';
+        ctx.textAlign = 'start';
         var y, w;
         for(i = -this.subDiv; i <= this.numR * this.subDiv; i++) {
             y = ~~(i * this.rulerRes / this.subDiv - (camY % this.rulerRes));
@@ -581,6 +702,9 @@ function updateScore(force) {
 function tick() {
     if (!running) return;
     // update things
+    if (tutorial) {
+        tutorial.update();
+    }
     boxes.update();
     hero.update();
     joystick.update();
@@ -592,6 +716,9 @@ function tick() {
     hero.draw();
     boxes.draw();
     joystick.draw();
+    if (tutorial) {
+        tutorial.draw();
+    }
     var i;
     for(i = ents.length - 1; i >= 0; i--) {
         if (ents[i]._dead) {
@@ -618,30 +745,39 @@ function reset() {
     tick();
 }
 
-function startGame() {
-    hide($('start-screen'));
+function displayScore() {
+    $('end-score').innerText = score;
+    highscore = Math.max(score, highscore);
+    $('end-highscore').innerHTML = highscore;
+}
+
+function startGame(isTutorial) {
+    transition($('game-canvas'));
     reset();
+    if (isTutorial) {
+        tutorial = new Tutorial();
+    }
 }
 
 function endGame() {
-    var eS = $('end-screen');
-    show(eS);
-    eS.style.opacity = 0;
-    setTimeout(function() {
-        eS.style.opacity = 1;
-    }, 0);
-    $('end-score').innerText = score;
     running = false;
+    displayScore();
+    transition($('end-screen'));
+}
+
+function backToMenu() {
+    transition($('start-screen'));
 }
 
 function restartGame() {
-    hide($('end-screen'));
-    show($('game-canvas'));
+    transition($('game-canvas'));
     reset();
 }
 
 window.onload = function() {
-    hide($('end-screen'));
+    currentScreen = $('start-screen');
+    resetScreen($('end-screen'));
+    resetScreen($('game-canvas'));
     can = $('game-canvas');
     ctx = can.getContext('2d');
     can.width = 600;
