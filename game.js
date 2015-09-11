@@ -299,29 +299,38 @@ function Hero() {
     this.pos = new V();
     this.vel = new V();
     this.acc = new V();
+    this.numFragments = 10;
     this._can = preDraw(this._drawChar.bind(this));
+    this._dead = true;
+    this._ps = [];
 }
 
 Hero.prototype = {
     _drawChar: function(ctx, can) {
-        can.width = can.height = this.size;
+        var size = ~~(this.size * 1.4);
+        can.width = can.height = size;
         ctx.fillStyle = 'black';
         ctx.beginPath();
-        ctx.moveTo(this.size / 2, 0);
-        ctx.lineTo(this.size, this.size / 2);
-        ctx.lineTo(this.size / 2, this.size);
-        ctx.arc(this.size / 2, this.size / 2, this.size / 2, Math.PI / 2, -Math.PI / 2);
+        ctx.moveTo(size / 2, 0);
+        ctx.lineTo(size, size / 2);
+        ctx.lineTo(size / 2, size);
+        ctx.lineTo(0, size / 2);
         ctx.closePath();
         ctx.fill();
     },
     update: function() {
-        // if out of viewport break
-        if (this.pos.x < 0 || this.pos.x > can.width || this.pos.y < camY || this.pos.y > camY + can.height) {
-            endGame();
+        if (this._dead) {
             return;
         }
-        if (boxes.collides(this.pos.y - this.size / 2, this.pos.x - this.size / 2, this.size, this.size)) {
-            endGame();
+        // if out of viewport break
+        var top = this.pos.y - this.size / 2,
+            left = this.pos.x - this.size / 2;
+        if (left < 0 || left + this.size > can.width || top < camY || top + this.size > camY + can.height) {
+            this.explode();
+            return;
+        }
+        if (boxes.collides(top, left, this.size, this.size)) {
+            this.explode();
             return;
         }
         motion(this);
@@ -331,6 +340,9 @@ Hero.prototype = {
     },
     draw: function() {
         drawCan(this._can, this.pos.x, this.pos.y - camY, joystick._angle);
+    },
+    explode: function() {
+        this._dead = true;
     },
     impulse: function(vec) {
         vec.scale(thrust);
@@ -509,8 +521,9 @@ function Background() {
     this.numY = 30; // TODO scale based on resoultion
     this.sepX = ~~(can.width / this.numX);
     this.sepY = ~~(can.height / this.numY);
-    this.rulerRes = this.sepY * 5;
-    this.rulerWidth = 70;
+    this.subDiv = 5;
+    this.rulerRes = this.sepY * this.subDiv;
+    this.rulerWidth = this.sepX * 2;
     this.rulerStart = can.height - can.height % this.rulerRes;
     this.numR = ~~(can.height / this.rulerRes);
     this.gridCan= preDraw(this._drawGrid.bind(this));
@@ -546,12 +559,12 @@ Background.prototype = {
         ctx.fillStyle = 'black';
         ctx.font = '20px sans-serif';
         var y, w;
-        for(i = -5; i <= this.numR * 5; i++) {
-            y = ~~(i * this.rulerRes / 5 - (camY % this.rulerRes));
+        for(i = -this.subDiv; i <= this.numR * this.subDiv; i++) {
+            y = ~~(i * this.rulerRes / this.subDiv - (camY % this.rulerRes));
             w = this.rulerWidth / 2;
-            if (i % 5 == 0) {
+            if (i % this.subDiv == 0) {
                 ctx.fillText("" + (-y -camY + this.rulerStart), 5, y - 2);
-                w = this.rulerWidth; 
+                w = this.rulerWidth;
             }
             ctx.beginPath();
             ctx.moveTo(0, y);
@@ -598,7 +611,7 @@ function reset() {
     score = 0;
     boxes = new Boxes();
     hero = new Hero();
-    hero.pos.x = 100;
+    hero.pos.set(100, 100);
     hero.acc.y = grav;
     running = true;
     joystick.reset();
