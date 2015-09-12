@@ -3,8 +3,8 @@ var scoreFactor = 40,
     grav = 0.002,
     maxVel = 0.9,
     resetDelay = 0.5,
-    boxVel = 0.1,
     highscore = 0,
+    baseDelta = 7,
     delT, currentScreen, tutorial, ents, score, camY, velY, running, can, ctx, hero, joystick, bg;
 
 const TUT_INTRO = 0,
@@ -12,25 +12,26 @@ const TUT_INTRO = 0,
     TUT_RELEASE = 2,
     TUT_REVERSE = 3,
     TUT_AVOID = 4,
-    TUT_OVER = 5;
+    TUT_OVER = 5,
+    TUT_RETRY = 6;
 
 function Tutorial() {
     this.fadeDelay = 10;
     this._state = TUT_INTRO;
-    this._releaseEnd = Math.Infinity;
     this._delTV = 0.07;
     this._t = 0;
     delT = 0;
     joystick.disabled = true;
 }
 
-tx1 = 0; ty1 = 0;
-tx2 = 0; ty2 = 0;
-tx3 = 0; ty3 = 0;
 Tutorial.prototype = {
     _changeState: function(nextState) {
         this._state = nextState;
         this._t = 0;
+    },
+    _retry: function() {
+        this._sinceGrab = null;
+        this._sinceRelease = null;
     },
     update: function() {
         this._t += 1;
@@ -73,6 +74,11 @@ Tutorial.prototype = {
                 }
                 if (this._t >= 500) {
                     this._changeState(TUT_OVER);
+                }
+                break;
+            case TUT_OVER:
+                if (delT < baseDelta) {
+                    delT += this._delTV;
                 }
                 break;
         }
@@ -149,7 +155,12 @@ Tutorial.prototype = {
         this._sinceRelease = this._t;
     },
     end: function() {
-        tutorial = null;
+        if (this._state == TUT_OVER) {
+            tutorial = null;
+            endGame();
+            return;
+        }
+        // restart
         running = false;
         transition($('start-screen'));
     }
@@ -331,7 +342,7 @@ Box.prototype = {
         ctx.stroke();
     },
     update: function() {
-        this.pos.y += boxVel * delT;
+        this.pos.y += boxes.speed * delT;
         this._top = this.pos.y - this.h / 2;
     },
     outOfView: function() {
@@ -344,12 +355,17 @@ Box.prototype = {
 
 function Boxes() {
     var i;
+    this._lastInc = 0;
     this._bs = [];
-    this.difficultyLevel = 1;
     this.numBoxes = 0;
     this.maxBoxes = 7;
     this.baseDelay = 1000;
     this.numChannels = 6;
+    this.speed = 0.1;
+    this.incAmt = 0.04;
+    this.incInt = 1000;
+    this.acc = 0.001;
+    this._targetSpeed = 0.1;
     this._t = 0;
     this._chs = [];
     this._chSep = can.width / this.numChannels;
@@ -404,6 +420,9 @@ Boxes.prototype = {
     },
     update: function() {
         var i, j, b, ch;
+        if (this.speed < this._targetSpeed) {
+            this.speed += this.acc;
+        }
         for(i = 0; i < this.numChannels; i++) {
             c = this._chs[i];
             for(j = c.length - 1; j >= 0; j--) {
@@ -429,6 +448,11 @@ Boxes.prototype = {
                 return;
             }
             this._trySpawn();
+        }
+        // increase difficulty level
+        if (-hero.pos.y > -this._lastInc + this.incInt) {
+            this._targetSpeed += this.incAmt;
+            this._lastInc = hero.pos.y;
         }
     },
     draw: function() {
@@ -619,7 +643,6 @@ const DIR_LEFT = 1,
 function Joystick() {
     this.wellSize = 90;
     this.dotSize = 40;
-    this.resetTime = 200;
     this.pos = new V();
     this.disabled = false;
     this.reset();
@@ -636,6 +659,7 @@ function Joystick() {
 
 Joystick.prototype = {
     reset: function() {
+        this.resetTime = 150;
         this.dot = new V();
         this.direction = DIR_LEFT;
         this.state = STICK_FREE;
@@ -692,11 +716,6 @@ Joystick.prototype = {
             t.sub(self.pos);
             t.sub(self._initTouch);
             self.dot.set(t.x, t.y);
-            if (self.direction === DIR_LEFT) {
-                self.dot.x = Math.min(0, self.dot.x);
-            } else {
-                self.dot.x = Math.max(0, self.dot.x);
-            }
             self.dot.limit(self.wellSize);
         });
     },
@@ -748,7 +767,7 @@ Joystick.prototype = {
         ctx.shadowColor = '#3a3';
         var c = this.wellSize + offset / 2;
         ctx.beginPath();
-        ctx.arc(c, c, r, Math.PI / 2, -Math.PI / 2);
+        ctx.arc(c, c, r, 0, 2 * Math.PI);
         ctx.closePath();
         ctx.stroke();
         ctx.globalAlpha = 0.7;
