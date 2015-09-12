@@ -671,6 +671,7 @@ function Joystick() {
     can.addEventListener('touchcancel', this._touchEnd.bind(this));
     can.addEventListener('touchleave', this._touchEnd.bind(this));
     // mouse event listeners
+    can.addEventListener('mouseout', this._mouseUp.bind(this));
     can.addEventListener('mouseup', this._mouseUp.bind(this));
     can.addEventListener('mousedown', this._mouseDown.bind(this));
     can.addEventListener('mousemove', this._mouseMove.bind(this));
@@ -763,6 +764,8 @@ Joystick.prototype = {
         this._release();
     },
     _mouseDown: function(ev) {
+        // interesting story here. mouse events are fired on touch devices on long press because that action opens the contextmenu
+        if (this.state === STICK_ENGAGED) return;
         if (this._start(V.fromMouse(ev))) {
             this._id = ev.button;
         }
@@ -822,7 +825,7 @@ function Background() {
     this.bgColor = '#fffacd';
     this.lineColor = '#eed8ae';
     this.numX = 22;
-    this.numY = 30; // TODO scale based on resoultion
+    this.numY = ~~(this.numX * can.height / can.width);
     this.sepX = ~~(can.width / this.numX);
     this.sepY = ~~(can.height / this.numY);
     this.subDiv = 5;
@@ -940,7 +943,7 @@ function displayScore() {
             highscore = 0;
         }
     }
-    $('end-score').innerText = score;
+    $('end-score').innerHTML = score;
     highscore = Math.max(score, highscore);
     $('end-highscore').innerHTML = highscore;
     try {
