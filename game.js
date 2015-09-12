@@ -1,12 +1,11 @@
-var delT = 7,
-    scoreFactor = 40,
+var scoreFactor = 40,
     thrust = -0.01,
     grav = 0.002,
     maxVel = 0.9,
     resetDelay = 0.5,
     boxVel = 0.1,
     highscore = 0,
-    currentScreen, tutorial, ents, score, camY, velY, running, can, ctx, hero, joystick, bg;
+    delT, currentScreen, tutorial, ents, score, camY, velY, running, can, ctx, hero, joystick, bg;
 
 const TUT_INTRO = 0,
     TUT_GRAB = 1,
@@ -15,8 +14,10 @@ const TUT_INTRO = 0,
     TUT_AVOID = 4;
 
 function Tutorial() {
+    this.fadeDelay = 20;
     this._state = TUT_INTRO;
     this._delTV = 0.01;
+    this._t = 0;
     delT = 0;
 }
 
@@ -24,23 +25,72 @@ tx1 = 0; ty1 = 0;
 tx2 = 0; ty2 = 0;
 tx3 = 0; ty3 = 0;
 Tutorial.prototype = {
+    _changeState: function(nextState) {
+        this._state = nextState;
+        this._t = 0;
+    },
     update: function() {
+        this._t += 1;
+        switch(this._state) {
+            case TUT_INTRO:
+                if (this._t >= 90) {
+                    this._changeState(TUT_GRAB);
+                    delT = 4;
+                }
+                break;
+            case TUT_GRAB:
+                if (this._sinceGrab) {
+                    if (this._t >= this._sinceGrab + this.fadeDelay) {
+                        delT = 3;
+                        this._changeState(TUT_RELEASE);
+                    }
+                }
+        }
+    },
+    _drawText: function(txt, x, y, color, alpha) {
+        ctx.save();
+        ctx.font = '32px sans-serif';
+        ctx.fillStyle = color || 'black';
+        ctx.globalAlpha = alpha;
+        ctx.fillText(txt, x, y);
+        ctx.restore();
+    },
+    _ease: function(s, e) {
+        if (this._t < s) {
+            return 0;
+        } else if (this._t < s + this.fadeDelay) {
+            return (this._t - s) / this.fadeDelay;
+        } else if (this._t > e - this.fadeDelay) {
+            return (e - this._t) / this.fadeDelay;
+        } else {
+            return 1;
+        }
     },
     draw: function() {
-        switch (this._state) {
+        var end;
+        switch(this._state) {
             case TUT_INTRO:
-                ctx.fillText('welcome to bhb', tx1, ty1);
-                ctx.fillText('grab the ', tx2, tx2);
-                ctx.fillText('blue dot', tx3, tx3);
+                this._drawText('gravity says hi', 220, 100, 'black', this._ease(0, 90));
                 break;
+            case TUT_GRAB:
+                if (this._sinceGrab) {
+                    end = this._sinceGrab + this.fadeDelay;
+                } else {
+                    end = Math.Infinity;
+                }
+                this._drawText('quick! grab the ', 180, 300, 'black', this._ease(30, end));
+                this._drawText('blue circle', 400, 300, 'blue', this._ease(40, end));
         }
     },
     dotTouchCallback: function() {
+        this._sinceGrab = this._t;
+
     },
     dotReleaseCallback: function() {
     },
     end: function() {
-        tutorial = null;
+        running = false;
+        transition($('start-screen'));
     }
 }
 
@@ -208,7 +258,7 @@ Box.prototype = {
         ctx.fillStyle = '#e55';
         ctx.lineWidth = 5;
         ctx.strokeStyle = '#f99';
-        ctx.shadowSize = 10;
+        ctx.shadowBlur = 4;
         ctx.shadowColor = 'red';
         ctx.beginPath();
         ctx.moveTo(padX, padY);
@@ -404,7 +454,7 @@ Hero.prototype = {
         can.width = can.height = size;
         ctx.fillStyle = 'black';
         ctx.shadowColor = '#333';
-        ctx.shadowSize = 100;
+        ctx.shadowBlur = 2;
         ctx.beginPath();
         ctx.moveTo(size / 2, 0);
         ctx.lineTo(size, size / 2);
@@ -419,6 +469,10 @@ Hero.prototype = {
         this.vel.limit(maxVel);
         if (this._dead) {
             if (this.explodeTime < 0) {
+                if (tutorial) {
+                    tutorial.end();
+                    return;
+                }
                 endGame();
                 return;
             }
@@ -557,6 +611,9 @@ Joystick.prototype = {
             t.sub(self.pos);
             self._initTouch.set(t.x, t.y);
             if (t.r() < self._dotR2) {
+                if (tutorial) {
+                    tutorial.dotTouchCallback();
+                }
                 self.state = STICK_ENGAGED;
                 self._id = touch.identifier;
             }
@@ -732,6 +789,7 @@ function tick() {
 }
 
 function reset() {
+    delT = 7;
     camY = 0;
     velY = 0;
     ents = [];
@@ -774,7 +832,19 @@ function restartGame() {
     reset();
 }
 
+function isMobile() {
+    // FIXME!
+    return false;
+}
+
 window.onload = function() {
+    if (!isMobile()) {
+        var screens = document.querySelector('.screen'),
+            i;
+        for(i = 0; i < screens.length; i++) {
+            screens[i].style['width'] = 600;
+        }
+    }
     currentScreen = $('start-screen');
     resetScreen($('end-screen'));
     resetScreen($('game-canvas'));
@@ -785,4 +855,10 @@ window.onload = function() {
     bg = new Background();
     joystick = new Joystick();
     joystick.pos.set(480, can.height * 0.95 - joystick.wellSize);
+}
+
+window.oncontextmenu = function(e) {
+    e.preventDefault();
+    e.stopPropogation();
+    return false;
 }

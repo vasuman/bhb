@@ -11,8 +11,10 @@
     <div id="holder">
         <div class="overlay screen" id="start-screen">
             <div class="title"> bhb </div>
-            <button onclick="startGame(false)"> ▶ </button>
-            <button onclick="startGame(true)"> ? </button>
+            <!-- <button onclick="startGame(false)"> ▶ </button> -->
+            <!-- <button onclick="startGame(true)"> ? </button> -->
+            <button onclick="startGame(true)"> tutorial </button>
+            <button onclick="startGame(false)"> play </button>
         </div>
         <canvas class="overlay" id="game-canvas"></canvas>
         <div class="overlay screen" id="end-screen">
@@ -22,8 +24,12 @@
                 <div> highscore <span class="stats" id="end-highscore">0</span> </div>
             </div>
             <div class="actions">
+                <!--
                 <button onclick="backToMenu()"> ⬅ </button>
                 <button onclick="restartGame()"> ⟲ </button>
+                -->
+                <button onclick="backToMenu()"> menu </button>
+                <button onclick="restartGame()"> restart </button>
             </div>
         </div>
     </div>
