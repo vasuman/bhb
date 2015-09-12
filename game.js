@@ -11,14 +11,17 @@ const TUT_INTRO = 0,
     TUT_GRAB = 1,
     TUT_RELEASE = 2,
     TUT_REVERSE = 3,
-    TUT_AVOID = 4;
+    TUT_AVOID = 4,
+    TUT_OVER = 5;
 
 function Tutorial() {
-    this.fadeDelay = 20;
+    this.fadeDelay = 10;
     this._state = TUT_INTRO;
-    this._delTV = 0.01;
+    this._releaseEnd = Math.Infinity;
+    this._delTV = 0.07;
     this._t = 0;
     delT = 0;
+    joystick.disabled = true;
 }
 
 tx1 = 0; ty1 = 0;
@@ -33,26 +36,55 @@ Tutorial.prototype = {
         this._t += 1;
         switch(this._state) {
             case TUT_INTRO:
-                if (this._t >= 90) {
+                if (this._t >= 50) {
                     this._changeState(TUT_GRAB);
-                    delT = 4;
+                    joystick.disabled = false;
                 }
                 break;
             case TUT_GRAB:
+                if (delT < 4) {
+                    delT += this._delTV;
+                }
                 if (this._sinceGrab) {
                     if (this._t >= this._sinceGrab + this.fadeDelay) {
-                        delT = 3;
                         this._changeState(TUT_RELEASE);
                     }
                 }
+                break;
+            case TUT_RELEASE:
+                if (delT > 1) {
+                    delT -= this._delTV;
+                }
+                if (this._sinceRelease) {
+                    delT += this._delTV;
+                    if (this._t >= this._sinceRelease + this.fadeDelay) {
+                        this._changeState(TUT_REVERSE);
+                    }
+                }
+                break;
+            case TUT_REVERSE:
+                if (this._t >= 150) {
+                    this._changeState(TUT_AVOID);
+                }
+                break;
+            case TUT_AVOID:
+                if (delT < 5) {
+                    delT += this._delTV;
+                }
+                if (this._t >= 500) {
+                    this._changeState(TUT_OVER);
+                }
+                break;
         }
     },
-    _drawText: function(txt, x, y, color, alpha) {
+    _drawText: function(txt, x, y, color, alpha, bold) {
         ctx.save();
-        ctx.font = '32px sans-serif';
+        ctx.font = (bold ? 'bold ' : '') + '32px sans-serif';
         ctx.fillStyle = color || 'black';
+        ctx.shadowColor = color || 'black';
+        ctx.shadowBlur = 20;
         ctx.globalAlpha = alpha;
-        ctx.fillText(txt, x, y);
+        ctx.fillText(txt, x, y - camY);
         ctx.restore();
     },
     _ease: function(s, e) {
@@ -67,28 +99,57 @@ Tutorial.prototype = {
         }
     },
     draw: function() {
-        var end;
+        var end = Math.Infinity,
+            baseX, baseY;
         switch(this._state) {
             case TUT_INTRO:
-                this._drawText('gravity says hi', 220, 100, 'black', this._ease(0, 90));
+                end = 50;
+                this._drawText('this is you', 150, 100, 'black', this._ease(0, end));
                 break;
             case TUT_GRAB:
                 if (this._sinceGrab) {
                     end = this._sinceGrab + this.fadeDelay;
-                } else {
-                    end = Math.Infinity;
                 }
-                this._drawText('quick! grab the ', 180, 300, 'black', this._ease(30, end));
-                this._drawText('blue circle', 400, 300, 'blue', this._ease(40, end));
+                this._drawText('grab the', 180, 300, 'black', this._ease(30, end));
+                this._drawText('blue circle', 310, 300, 'blue', this._ease(40, end));
+                break;
+            case TUT_RELEASE:
+                if (this._sinceRelease) {
+                    end = this._sinceRelease + this.fadeDelay;
+                }
+                baseX = 180;
+                baseY = 400;
+                this._drawText('pull down in', baseX, baseY, 'black', this._ease(0, end));
+                this._drawText('the', baseX, baseY + 40, 'black', this._ease(10, end));
+                this._drawText('green region', baseX + 50, baseY + 40, 'green', this._ease(20, end));
+                this._drawText('and release to', baseX, baseY + 80, 'black', this._ease(30, end));
+                this._drawText('thrust', baseX + 210, baseY + 80, 'black', this._ease(40, end), true);
+                break;
+            case TUT_REVERSE:
+                end = 150;
+                baseX = 250;
+                baseY = joystick.pos.y - joystick.wellSize - 60;
+                this._drawText('green region', baseX, baseY, 'green', this._ease(0, end));
+                this._drawText('reverses', baseX + 185, baseY, 'black', this._ease(10, end), true);
+                this._drawText('every time you thrust', baseX, baseY + 40, 'black', this._ease(20, end));
+                break;
+            case TUT_AVOID:
+                end = 500;
+                this._drawText('avoid the edges of the screen', 150, 300, 'black', this._ease(30, end));
+                this._drawText('keep climbing', 100, 150, 'black', this._ease(170, end));
+                this._drawText('dodge falling ', 100, 30, 'black', this._ease(270, end));
+                this._drawText('red boxes', 295, 30, 'red', this._ease(280, end));
+                break;
         }
     },
-    dotTouchCallback: function() {
+    touchDown: function() {
         this._sinceGrab = this._t;
-
     },
-    dotReleaseCallback: function() {
+    touchUp: function() {
+        this._sinceRelease = this._t;
     },
     end: function() {
+        tutorial = null;
         running = false;
         transition($('start-screen'));
     }
@@ -257,7 +318,7 @@ Box.prototype = {
         ctx.globalAlpha = 0.8;
         ctx.fillStyle = '#e55';
         ctx.lineWidth = 5;
-        ctx.strokeStyle = '#f99';
+        ctx.strokeStyle = '#e77';
         ctx.shadowBlur = 4;
         ctx.shadowColor = 'red';
         ctx.beginPath();
@@ -442,7 +503,7 @@ function Hero() {
     this.vel = new V();
     this.acc = new V();
     this.numFragments = 8;
-    this.explodeTime = 250;
+    this.explodeTime = 40;
     this._can = preDraw(this._drawChar.bind(this));
     this._dead = false;
     this._fs = [];
@@ -450,10 +511,12 @@ function Hero() {
 
 Hero.prototype = {
     _drawChar: function(ctx, can) {
-        var size = ~~(this.size * 1.4);
+        var size = ~~(this.size * 1.3);
         can.width = can.height = size;
-        ctx.fillStyle = 'black';
-        ctx.shadowColor = '#333';
+        ctx.globalAlpha = 0.9
+        ctx.fillStyle = '#222';
+        ctx.strokeStyle = '#333';
+        ctx.shadowColor = '#444';
         ctx.shadowBlur = 2;
         ctx.beginPath();
         ctx.moveTo(size / 2, 0);
@@ -476,7 +539,7 @@ Hero.prototype = {
                 endGame();
                 return;
             }
-            this.explodeTime -= delT;
+            this.explodeTime -= 1;
             this._fs.forEach(function(f) {
                 f.update();
             });
@@ -558,6 +621,7 @@ function Joystick() {
     this.dotSize = 40;
     this.resetTime = 200;
     this.pos = new V();
+    this.disabled = false;
     this.reset();
     this._dotR2 = this.dotSize * this.dotSize;
     this._dotCan = preDraw(this._drawDot.bind(this));
@@ -605,17 +669,17 @@ Joystick.prototype = {
     _touchStart: function(ev) {
         var self = this;
         forEach(ev.changedTouches, function(touch) {
-            if (self.state !== STICK_FREE) return;
+            if (self.state !== STICK_FREE || self.disabled) return;
             // check for collision with dot
             var t = V.fromEvent(touch);
             t.sub(self.pos);
             self._initTouch.set(t.x, t.y);
             if (t.r() < self._dotR2) {
-                if (tutorial) {
-                    tutorial.dotTouchCallback();
-                }
                 self.state = STICK_ENGAGED;
                 self._id = touch.identifier;
+                if (tutorial) {
+                    tutorial.touchDown();
+                }
             }
         });
     },
@@ -650,6 +714,9 @@ Joystick.prototype = {
         hero.impulse(this.dot.i());
         this._lf = 0;
         this.direction = (this.direction === DIR_LEFT) ? DIR_RIGHT : DIR_LEFT;
+        if (tutorial) {
+            tutorial.touchUp();
+        }
     },
     _drawDot: function(ctx, can) {
         var r = this.dotSize,
@@ -770,12 +837,12 @@ function tick() {
     // draw things
     ctx.clearRect(0, 0, can.width, can.height);
     bg.draw();
-    hero.draw();
-    boxes.draw();
-    joystick.draw();
     if (tutorial) {
         tutorial.draw();
     }
+    hero.draw();
+    boxes.draw();
+    joystick.draw();
     var i;
     for(i = ents.length - 1; i >= 0; i--) {
         if (ents[i]._dead) {
@@ -859,6 +926,5 @@ window.onload = function() {
 
 window.oncontextmenu = function(e) {
     e.preventDefault();
-    e.stopPropogation();
     return false;
 }
