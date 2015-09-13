@@ -54,6 +54,14 @@ button {
     font-weight: bold;
 }
 
+.credits {
+    margin-top: auto;
+    margin-bottom: 1vh;
+    font-size: 1.5em;
+    color: #777;
+    font-family: monospace;
+}
+
 #start-screen > button {
     margin-top: 3vh;
 }

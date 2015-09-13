@@ -2,7 +2,6 @@ var scoreFactor = 40,
     thrust = -0.01,
     grav = 0.002,
     maxVel = 0.9,
-    resetDelay = 0.5,
     highscore = 0,
     baseDelta = 7,
     delT, currentScreen, tutorial, ents, score, camY, velY, running, can, ctx, hero, joystick, bg;
@@ -18,7 +17,7 @@ const TUT_INTRO = 0,
 function Tutorial() {
     this.fadeDelay = 10;
     this._state = TUT_INTRO;
-    this._delTV = 0.07;
+    this._delTV = 0.04;
     this._t = 0;
     delT = 0;
     joystick.disabled = true;
@@ -43,7 +42,7 @@ Tutorial.prototype = {
                 }
                 break;
             case TUT_GRAB:
-                if (delT < 4) {
+                if (delT < 3) {
                     delT += this._delTV;
                 }
                 if (this._sinceGrab) {
@@ -53,7 +52,7 @@ Tutorial.prototype = {
                 }
                 break;
             case TUT_RELEASE:
-                if (delT > 1) {
+                if (delT > 0.7) {
                     delT -= this._delTV;
                 }
                 if (this._sinceRelease) {
@@ -95,7 +94,7 @@ Tutorial.prototype = {
         ctx.font = (bold ? 'bold ' : '') + '32px Arial';
         ctx.fillStyle = color || 'black';
         ctx.shadowColor = color || 'black';
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 7;
         ctx.globalAlpha = alpha;
         ctx.fillText(txt, x, y - camY);
         ctx.restore();
@@ -550,7 +549,7 @@ function Hero() {
 
 Hero.prototype = {
     _drawChar: function(ctx, can) {
-        var size = ~~(this.size * 1.3);
+        var size = ~~(this.size * 1.2);
         can.width = can.height = size;
         ctx.globalAlpha = 0.9
         ctx.fillStyle = '#222';
@@ -656,7 +655,7 @@ const DIR_LEFT = 1,
     DIR_RIGHT = 2;
 
 function Joystick() {
-    this.wellSize = 90;
+    this.wellSize = 100;
     this.dotSize = 40;
     this.pos = new V();
     this.disabled = false;
@@ -679,7 +678,7 @@ function Joystick() {
 
 Joystick.prototype = {
     reset: function() {
-        this.resetTime = 150;
+        this.resetTime = 130;
         this.dot = new V();
         this.direction = DIR_LEFT;
         this.state = STICK_FREE;
@@ -989,7 +988,7 @@ window.onload = function() {
     can.height = document.documentElement.clientHeight;
     bg = new Background();
     joystick = new Joystick();
-    joystick.pos.set(480, can.height * 0.95 - joystick.wellSize);
+    joystick.pos.set(470, can.height * 0.95 - joystick.wellSize);
 }
 
 window.oncontextmenu = function(e) {
