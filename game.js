@@ -832,7 +832,7 @@ function Background() {
     this.rulerRes = this.sepY * this.subDiv;
     this.rulerWidth = this.sepX * 2;
     this.rulerStart = can.height - can.height % this.rulerRes;
-    this.numR = ~~(can.height / this.rulerRes);
+    this.numR = ~~(can.height / this.rulerRes) + 1;
     this.gridCan= preDraw(this._drawGrid.bind(this));
 }
 
@@ -980,13 +980,6 @@ function isMobile() {
 }
 
 window.onload = function() {
-    if (!isMobile()) {
-        var screens = document.querySelector('.screen'),
-            i;
-        for(i = 0; i < screens.length; i++) {
-            screens[i].style['width'] = 600;
-        }
-    }
     currentScreen = $('start-screen');
     resetScreen($('end-screen'));
     resetScreen($('game-canvas'));
