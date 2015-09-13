@@ -768,7 +768,7 @@ Joystick.prototype = {
     },
     _mouseDown: function(ev) {
         // interesting story here. mouse events are fired on touch devices on long press because that action opens the contextmenu
-        if (this.state === STICK_ENGAGED) return;
+        if (this.state === STICK_FREE) return;
         if (this._start(V.fromMouse(ev))) {
             this._id = ev.button;
         }
