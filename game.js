@@ -758,6 +758,7 @@ Joystick.prototype = {
         });
     },
     _mouseUp: function(ev) {
+        if (this.state !== STICK_ENGAGED) return;
         if (this._id !== ev.button) return;
         this._id = null;
         this._release();
@@ -770,6 +771,7 @@ Joystick.prototype = {
         }
     },
     _mouseMove: function(ev) {
+        if (this.state !== STICK_ENGAGED) return;
         if (this._id !== ev.button) return;
         this._move(V.fromMouse(ev));
     },
