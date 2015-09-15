@@ -344,8 +344,6 @@ Box.prototype = {
         ctx.fillStyle = '#e55';
         ctx.lineWidth = 5;
         ctx.strokeStyle = '#e77';
-        ctx.shadowBlur = 4;
-        ctx.shadowColor = 'red';
         ctx.beginPath();
         ctx.moveTo(padX, padY);
         ctx.lineTo(padX + this.w, padY);
@@ -373,7 +371,7 @@ function Boxes() {
     this._bs = [];
     this.numBoxes = 0;
     this.maxBoxes = 7;
-    this.baseDelay = 1000;
+    this.baseDelay = 750;
     this.numChannels = 6;
     this.speed = 0.1;
     this.incAmt = 0.065;
@@ -417,7 +415,7 @@ Boxes.prototype = {
     _spawnBox: function(c) {
         var b, w, h, sp;
         w = ~~randRange(this._chSep / 2, this._chSep * 3 / 4);
-        h = ~~randRange(70, 140);
+        h = ~~randRange(40, 80);
         b = new Box(w, h);
         sp = this._chSep - w;
         b.pos.x = this._chSep * c + randRange(0, sp - 2) + w / 2;
