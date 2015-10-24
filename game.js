@@ -6,7 +6,7 @@ var scoreFactor = 40,
     baseDelta = 7,
     delT, currentScreen, tutorial, ents, score, camY, velY, running, can, ctx, hero, joystick, bg;
 
-const TUT_INTRO = 0,
+var TUT_INTRO = 0,
     TUT_GRAB = 1,
     TUT_RELEASE = 2,
     TUT_REVERSE = 3,
@@ -312,7 +312,6 @@ V.prototype = {
         return this.x * this.x + this.y * this.y;
     },
 
-    // broken but better
     limit: function(rad) {
         var d = this.r(),
             rad2 = rad * rad,
@@ -325,25 +324,59 @@ V.prototype = {
     }
 }
 
+var BOX_RED = 0,
+    BOX_BLUE = 1,
+    BOX_GREEN = 2;
+
+var TYPE_PARAMS = {
+    0: {
+        speed: 1,
+        fill: '#e55',
+        stroke: '#d77'
+    },
+    1: {
+        speed: 1.8,
+        fill: '#55e',
+        stroke: '#77d'
+    },
+    2: {
+        speed: 2.4,
+        fill: '#5e5',
+        stroke: '#7d7'
+    }
+};
+
 function Box(w, h) {
     this.pos = new V();
     this._top = 0;
     this._left = 0;
     this.w = w;
     this.h = h;
+    this._type = this._getType();
+    this.speed = TYPE_PARAMS[this._type].speed * boxes.speed;
     this.can = preDraw(this._drawBox.bind(this));
 }
 
 Box.prototype = {
+    _getType: function() {
+        var r = randRange(0, 10);
+        if (r < 6) {
+            return BOX_RED;
+        } else if (r < 8) {
+            return BOX_GREEN;
+        } else {
+            return BOX_BLUE;
+        }
+    },
     _drawBox: function(ctx, can) {
         var padX = 5,
             padY = 5;
         can.width = this.w + 2 * padX;
         can.height = this.h + 2 * padY;
         ctx.globalAlpha = 0.8;
-        ctx.fillStyle = '#e55';
+        ctx.fillStyle = TYPE_PARAMS[this._type].fill;
         ctx.lineWidth = 5;
-        ctx.strokeStyle = '#e77';
+        ctx.strokeStyle = TYPE_PARAMS[this._type].stroke;
         ctx.beginPath();
         ctx.moveTo(padX, padY);
         ctx.lineTo(padX + this.w, padY);
@@ -354,7 +387,7 @@ Box.prototype = {
         ctx.stroke();
     },
     update: function() {
-        this.pos.y += boxes.speed * delT;
+        this.pos.y += this.speed * delT;
         this._top = this.pos.y - this.h / 2;
     },
     outOfView: function() {
@@ -645,16 +678,16 @@ Hero.prototype = {
     }
 }
 
-const STICK_ENGAGED = 1,
+var STICK_ENGAGED = 1,
     STICK_RESETTING = 2,
     STICK_FREE = 3;
 
-const DIR_LEFT = 1,
+var DIR_LEFT = 1,
     DIR_RIGHT = 2;
 
 function Joystick() {
-    this.wellSize = 100;
-    this.dotSize = 40;
+    this.wellSize = 130;
+    this.dotSize = 50;
     this.pos = new V();
     this.disabled = false;
     this.reset();
@@ -992,7 +1025,8 @@ window.onload = function() {
     can.height = document.documentElement.clientHeight;
     bg = new Background();
     joystick = new Joystick();
-    joystick.pos.set(470, can.height * 0.95 - joystick.wellSize);
+    var padding = 145;
+    joystick.pos.set(can.width - padding, can.height - padding * 1.2);
 }
 
 window.oncontextmenu = function(e) {

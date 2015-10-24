@@ -1,0 +1,17 @@
+<!-- Phonegap Build Configuration -->
+<widget xmlns="http://www.w3.org/ns/widgets"
+        xmlns:gap="http://phonegap.com/ns/1.0"
+        id="in.varav.bhb" versionCode="10" version="1.0.0">
+
+    <name>bhb</name>
+
+    <description>
+        A jump reversal game where the objective is to get as high as you can.
+    </description>
+
+    <author href="https://www.varav.in" email="vasumanar@gmail.com">Vasuman</author>
+
+    <preference name="orientation" value="potrait" />
+    <preference name="fullscreen" value="true" />
+</widget>
+
