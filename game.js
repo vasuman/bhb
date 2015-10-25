@@ -1015,14 +1015,20 @@ function restartGame() {
     reset();
 }
 
+function resize() {
+    can.width = 600;
+    can.height = document.body.clientHeight;
+}
+
+window.onresize = resize;
+
 window.onload = function() {
     currentScreen = $('start-screen');
     resetScreen($('end-screen'));
     resetScreen($('game-canvas'));
     can = $('game-canvas');
     ctx = can.getContext('2d');
-    can.width = 600;
-    can.height = document.body.clientHeight;
+    resize();
     bg = new Background();
     var stickSize = 120;
     joystick = new Joystick(stickSize);

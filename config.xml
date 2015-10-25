@@ -5,6 +5,8 @@
 
     <name>bhb</name>
 
+    <icon src="icon.png" />
+
     <description>
         A jump reversal game where the objective is to get as high as you can.
     </description>
