@@ -4,15 +4,23 @@ var scoreFactor = 40,
     maxVel = 0.9,
     highscore = 0,
     baseDelta = 7,
-    delT, currentScreen, tutorial, ents, score, camY, velY, running, can, ctx, hero, joystick, bg;
+    delT, currentScreen, tutorial, score, camY, velY, running, can, ctx, hero, joystick, bg;
 
-const TUT_INTRO = 0,
+var TUT_INTRO = 0,
     TUT_GRAB = 1,
     TUT_RELEASE = 2,
     TUT_REVERSE = 3,
     TUT_AVOID = 4,
     TUT_OVER = 5,
     TUT_FAIL = 6;
+
+function isTouchEnabled() {
+    return 'ontouchstart' in window || navigator.msMaxTouchPoints;
+}
+
+function isHighResolution() {
+    return window.devicePixelRatio > 2;
+}
 
 function Tutorial() {
     this.fadeDelay = 10;
@@ -81,10 +89,16 @@ Tutorial.prototype = {
                 }
                 break;
             case TUT_FAIL:
-                if (this._t >= 80) {
+                if (camY < 0) {
+                    velY += (-camY / 200);
+                    camY = ~~(camY + velY);
+                    this._t = 0;
+                } else if (this._t >= 120) {
                     transition($('start-screen'));
                     running = false;
                     tutorial = null;
+                } else {
+                    camY = 0;
                 }
                 break;
         }
@@ -155,8 +169,8 @@ Tutorial.prototype = {
                 this._drawText('red boxes', 345, 30, 'red', this._ease(270, end));
                 break;
             case TUT_FAIL:
-                end = 80;
-                this._drawText('mediocre', 240, 50, 'black', this._ease(0, 80), true);
+                end = 120;
+                this._drawText('try again', 240, 50, 'black', this._ease(20, end), true);
         }
     },
     touchDown: function() {
@@ -169,10 +183,10 @@ Tutorial.prototype = {
         if (this._state === TUT_OVER) {
             tutorial = null;
             endGame();
-            return;
+        } else if (this._state !== TUT_FAIL) {
+            // restart
+            this._changeState(TUT_FAIL);
         }
-        // restart
-        this._changeState(TUT_FAIL);
     }
 }
 
@@ -312,7 +326,6 @@ V.prototype = {
         return this.x * this.x + this.y * this.y;
     },
 
-    // broken but better
     limit: function(rad) {
         var d = this.r(),
             rad2 = rad * rad,
@@ -325,25 +338,60 @@ V.prototype = {
     }
 }
 
+var BOX_RED = 0,
+    BOX_BLUE = 1,
+    BOX_GREEN = 2;
+
+var TYPE_PARAMS = {};
+
+TYPE_PARAMS[BOX_RED] = {
+    speed: 1,
+    fill: '#e55',
+    stroke: '#d88'
+};
+
+TYPE_PARAMS[BOX_BLUE] = {
+    speed: 1.8,
+    fill: '#77d',
+    stroke: '#99b'
+};
+TYPE_PARAMS[BOX_GREEN] = {
+    speed: 2.4,
+    fill: '#6d6',
+    stroke: '#8e8'
+};
+
 function Box(w, h) {
     this.pos = new V();
     this._top = 0;
     this._left = 0;
     this.w = w;
     this.h = h;
+    this._type = this._getType();
+    this.speed = TYPE_PARAMS[this._type].speed * boxes.speed;
     this.can = preDraw(this._drawBox.bind(this));
 }
 
 Box.prototype = {
+    _getType: function() {
+        var r = randRange(0, 10);
+        if (r < 5) {
+            return BOX_RED;
+        } else if (r < 8) {
+            return BOX_BLUE;
+        } else {
+            return BOX_GREEN;
+        }
+    },
     _drawBox: function(ctx, can) {
         var padX = 5,
             padY = 5;
         can.width = this.w + 2 * padX;
         can.height = this.h + 2 * padY;
         ctx.globalAlpha = 0.8;
-        ctx.fillStyle = '#e55';
+        ctx.fillStyle = TYPE_PARAMS[this._type].fill;
         ctx.lineWidth = 5;
-        ctx.strokeStyle = '#e77';
+        ctx.strokeStyle = TYPE_PARAMS[this._type].stroke;
         ctx.beginPath();
         ctx.moveTo(padX, padY);
         ctx.lineTo(padX + this.w, padY);
@@ -354,7 +402,7 @@ Box.prototype = {
         ctx.stroke();
     },
     update: function() {
-        this.pos.y += boxes.speed * delT;
+        this.pos.y += this.speed * delT;
         this._top = this.pos.y - this.h / 2;
     },
     outOfView: function() {
@@ -375,7 +423,7 @@ function Boxes() {
     this.numChannels = 6;
     this.speed = 0.1;
     this.incAmt = 0.065;
-    this.incInt = 1000;
+    this.incInt = 3000;
     this.acc = 0.001;
     this._targetSpeed = 0.1;
     this._t = 0;
@@ -567,15 +615,16 @@ Hero.prototype = {
         motion(this);
         this.vel.limit(maxVel);
         if (this._dead) {
-            this.explodeTime -= 1;
-            if (this.explodeTime === 0) {
+            if (this.explodeTime < 0) {
+                return;
+            } else if (this.explodeTime === 0) {
                 if (tutorial) {
                     tutorial.end();
-                    return;
+                } else {
+                    endGame();
                 }
-                endGame();
-                return;
             }
+            this.explodeTime -= 1;
             this._fs.forEach(function(f) {
                 f.update();
             });
@@ -645,23 +694,23 @@ Hero.prototype = {
     }
 }
 
-const STICK_ENGAGED = 1,
+var STICK_ENGAGED = 1,
     STICK_RESETTING = 2,
     STICK_FREE = 3;
 
-const DIR_LEFT = 1,
+var DIR_LEFT = 1,
     DIR_RIGHT = 2;
 
-function Joystick() {
-    this.wellSize = 100;
-    this.dotSize = 40;
+function Joystick(stickSize) {
+    this.wellSize = ~~stickSize;
+    this.dotSize = ~~(stickSize * 0.35);
     this.pos = new V();
     this.disabled = false;
     this.reset();
     this._dotR2 = this.dotSize * this.dotSize;
     this._dotCan = preDraw(this._drawDot.bind(this));
     this._wellCan = preDraw(this._drawWell.bind(this));
-    if (isMobile()) {
+    if (isTouchEnabled()) {
         // touch event listeners
         can.addEventListener('touchstart', this._touchStart.bind(this));
         can.addEventListener('touchmove', this._touchMove.bind(this));
@@ -910,15 +959,6 @@ function tick() {
     hero.draw();
     boxes.draw();
     joystick.draw();
-    var i;
-    for(i = ents.length - 1; i >= 0; i--) {
-        if (ents[i]._dead) {
-            ents.splice(i, 1);
-            continue;
-        }
-        ents[i].update();
-        ents[i].draw();
-    }
     requestAnimationFrame(tick);
 }
 
@@ -926,7 +966,6 @@ function reset() {
     delT = 7;
     camY = 0;
     velY = 0;
-    ents = [];
     score = 0;
     boxes = new Boxes();
     hero = new Hero();
@@ -976,11 +1015,13 @@ function restartGame() {
     reset();
 }
 
-function isMobile() {
-    var check = false;
-    (function(a){if(/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|iris|kindle|lge |maemo|midp|mmp|mobile.+firefox|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows ce|xda|xiino|android|ipad|playbook|silk/i.test(a)||/1207|6310|6590|3gso|4thp|50[1-6]i|770s|802s|a wa|abac|ac(er|oo|s\-)|ai(ko|rn)|al(av|ca|co)|amoi|an(ex|ny|yw)|aptu|ar(ch|go)|as(te|us)|attw|au(di|\-m|r |s )|avan|be(ck|ll|nq)|bi(lb|rd)|bl(ac|az)|br(e|v)w|bumb|bw\-(n|u)|c55\/|capi|ccwa|cdm\-|cell|chtm|cldc|cmd\-|co(mp|nd)|craw|da(it|ll|ng)|dbte|dc\-s|devi|dica|dmob|do(c|p)o|ds(12|\-d)|el(49|ai)|em(l2|ul)|er(ic|k0)|esl8|ez([4-7]0|os|wa|ze)|fetc|fly(\-|_)|g1 u|g560|gene|gf\-5|g\-mo|go(\.w|od)|gr(ad|un)|haie|hcit|hd\-(m|p|t)|hei\-|hi(pt|ta)|hp( i|ip)|hs\-c|ht(c(\-| |_|a|g|p|s|t)|tp)|hu(aw|tc)|i\-(20|go|ma)|i230|iac( |\-|\/)|ibro|idea|ig01|ikom|im1k|inno|ipaq|iris|ja(t|v)a|jbro|jemu|jigs|kddi|keji|kgt( |\/)|klon|kpt |kwc\-|kyo(c|k)|le(no|xi)|lg( g|\/(k|l|u)|50|54|\-[a-w])|libw|lynx|m1\-w|m3ga|m50\/|ma(te|ui|xo)|mc(01|21|ca)|m\-cr|me(rc|ri)|mi(o8|oa|ts)|mmef|mo(01|02|bi|de|do|t(\-| |o|v)|zz)|mt(50|p1|v )|mwbp|mywa|n10[0-2]|n20[2-3]|n30(0|2)|n50(0|2|5)|n7(0(0|1)|10)|ne((c|m)\-|on|tf|wf|wg|wt)|nok(6|i)|nzph|o2im|op(ti|wv)|oran|owg1|p800|pan(a|d|t)|pdxg|pg(13|\-([1-8]|c))|phil|pire|pl(ay|uc)|pn\-2|po(ck|rt|se)|prox|psio|pt\-g|qa\-a|qc(07|12|21|32|60|\-[2-7]|i\-)|qtek|r380|r600|raks|rim9|ro(ve|zo)|s55\/|sa(ge|ma|mm|ms|ny|va)|sc(01|h\-|oo|p\-)|sdk\/|se(c(\-|0|1)|47|mc|nd|ri)|sgh\-|shar|sie(\-|m)|sk\-0|sl(45|id)|sm(al|ar|b3|it|t5)|so(ft|ny)|sp(01|h\-|v\-|v )|sy(01|mb)|t2(18|50)|t6(00|10|18)|ta(gt|lk)|tcl\-|tdg\-|tel(i|m)|tim\-|t\-mo|to(pl|sh)|ts(70|m\-|m3|m5)|tx\-9|up(\.b|g1|si)|utst|v400|v750|veri|vi(rg|te)|vk(40|5[0-3]|\-v)|vm40|voda|vulc|vx(52|53|60|61|70|80|81|83|85|98)|w3c(\-| )|webc|whit|wi(g |nc|nw)|wmlb|wonu|x700|yas\-|your|zeto|zte\-/i.test(a.substr(0,4)))check = true})(navigator.userAgent||navigator.vendor||window.opera);
-    return check;
+function resize() {
+    can.width = 600;
+    can.height = document.body.clientHeight;
+    bg = new Background();
 }
+
+window.onresize = resize;
 
 window.onload = function() {
     currentScreen = $('start-screen');
@@ -988,11 +1029,11 @@ window.onload = function() {
     resetScreen($('game-canvas'));
     can = $('game-canvas');
     ctx = can.getContext('2d');
-    can.width = 600;
-    can.height = document.documentElement.clientHeight;
-    bg = new Background();
-    joystick = new Joystick();
-    joystick.pos.set(470, can.height * 0.95 - joystick.wellSize);
+    resize();
+    var stickSize = 120;
+    joystick = new Joystick(stickSize);
+    var pad = ~~(stickSize * 1.3);
+    joystick.pos.set(can.width - pad, can.height - pad);
 }
 
 window.oncontextmenu = function(e) {

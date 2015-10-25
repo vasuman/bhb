@@ -10,6 +10,7 @@ html, body {
 }
 
 body {
+    width: 600px;
     text-align: center;
     position: relative;
     font-family: sans-serif;
