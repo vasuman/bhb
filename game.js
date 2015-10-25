@@ -1018,6 +1018,7 @@ function restartGame() {
 function resize() {
     can.width = 600;
     can.height = document.body.clientHeight;
+    bg = new Background();
 }
 
 window.onresize = resize;
@@ -1029,7 +1030,6 @@ window.onload = function() {
     can = $('game-canvas');
     ctx = can.getContext('2d');
     resize();
-    bg = new Background();
     var stickSize = 120;
     joystick = new Joystick(stickSize);
     var pad = ~~(stickSize * 1.3);
