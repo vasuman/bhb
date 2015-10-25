@@ -1019,6 +1019,9 @@ window.onload = function() {
     currentScreen = $('start-screen');
     resetScreen($('end-screen'));
     resetScreen($('game-canvas'));
+    if (webView) {
+        webView.getSettings().setUseWideViewPort(true);
+    }
     can = $('game-canvas');
     ctx = can.getContext('2d');
     can.width = 600;
