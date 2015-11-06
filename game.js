@@ -1,10 +1,11 @@
-var scoreFactor = 40,
+var scoreFactor = 50,
     thrust = -0.01,
     grav = 0.002,
     maxVel = 0.9,
     highscore = 0,
     baseDelta = 7,
-    delT, currentScreen, tutorial, score, camY, velY, running, can, ctx, hero, joystick, bg;
+    paused, delT, currentScreen, tutorial, score, camY, velY, running, can,
+    ctx, hero, joystick, bg;
 
 var TUT_INTRO = 0,
     TUT_GRAB = 1,
@@ -94,7 +95,7 @@ Tutorial.prototype = {
                     camY = ~~(camY + velY);
                     this._t = 0;
                 } else if (this._t >= 120) {
-                    transition($('start-screen'));
+                    transition(sI('start-screen'));
                     running = false;
                     tutorial = null;
                 } else {
@@ -166,7 +167,7 @@ Tutorial.prototype = {
                 this._drawText('avoid the edges of the screen', 150, 300, 'black', this._ease(30, end));
                 this._drawText('keep climbing', 100, 150, 'black', this._ease(170, end));
                 this._drawText('dodge falling ', 150, 30, 'black', this._ease(270, end));
-                this._drawText('red boxes', 345, 30, 'red', this._ease(270, end));
+                this._drawText('boxes', 345, 30, 'black', this._ease(270, end), true);
                 break;
             case TUT_FAIL:
                 end = 120;
@@ -191,7 +192,7 @@ Tutorial.prototype = {
 }
 
 // util
-function $(id) {
+function sI(id) {
     return document.getElementById(id);
 }
 
@@ -881,7 +882,7 @@ function Background() {
     this.sepY = ~~(can.height / this.numY);
     this.subDiv = 5;
     this.rulerRes = this.sepY * this.subDiv;
-    this.rulerWidth = this.sepX * 2;
+    this.rulerWidth = this.sepX * 3;
     this.rulerStart = can.height - can.height % this.rulerRes;
     this.numR = ~~(can.height / this.rulerRes) + 1;
     this.gridCan= preDraw(this._drawGrid.bind(this));
@@ -919,12 +920,13 @@ Background.prototype = {
         ctx.fillStyle = 'black';
         ctx.font = '20px sans-serif';
         ctx.textAlign = 'start';
-        var y, w;
+        var y, w, txt;
         for(i = -this.subDiv; i <= this.numR * this.subDiv; i++) {
             y = ~~(i * this.rulerRes / this.subDiv - (camY % this.rulerRes));
-            w = this.rulerWidth / 2;
+            w = this.rulerWidth / 3;
+            txt = '' + (this.rulerStart - camY - y - can.height);
             if (i % this.subDiv == 0) {
-                ctx.fillText("" + (-y -camY + this.rulerStart), 5, y - 2);
+                ctx.fillText(txt, 5, y - 2);
                 w = this.rulerWidth;
             }
             ctx.beginPath();
@@ -942,14 +944,16 @@ function updateScore(force) {
 function tick() {
     if (!running) return;
     // update things
-    if (tutorial) {
-        tutorial.update();
+    if (!paused) {
+        if (tutorial) {
+            tutorial.update();
+        }
+        boxes.update();
+        hero.update();
+        joystick.update();
+        bg.update();
+        updateScore();
     }
-    boxes.update();
-    hero.update();
-    joystick.update();
-    bg.update();
-    updateScore();
     // draw things
     ctx.clearRect(0, 0, can.width, can.height);
     bg.draw();
@@ -959,10 +963,12 @@ function tick() {
     hero.draw();
     boxes.draw();
     joystick.draw();
+    drawScore();
     requestAnimationFrame(tick);
 }
 
 function reset() {
+    paused = false;
     delT = 7;
     camY = 0;
     velY = 0;
@@ -976,7 +982,7 @@ function reset() {
     tick();
 }
 
-function displayScore() {
+function finalScore() {
     if (!highscore) {
         try {
             highscore = +localStorage.getItem('highscore');
@@ -984,16 +990,28 @@ function displayScore() {
             highscore = 0;
         }
     }
-    $('end-score').innerHTML = score;
+    sI('end-score').innerHTML = score;
     highscore = Math.max(score, highscore);
-    $('end-highscore').innerHTML = highscore;
+    sI('end-highscore').innerHTML = highscore;
     try {
         localStorage.setItem('highscore', highscore);
     } catch (e) {}
 }
 
+function drawScore() {
+    ctx.save();
+    ctx.font = '48px Arial';
+    ctx.textAlign = 'end';
+    ctx.fillStyle = '#444';
+    ctx.shadowColor = '#222';
+    ctx.shadowBlur = 3;
+    ctx.fillText('' + score, can.width - 10, 54);
+    ctx.restore();
+}
+
+
 function startGame(isTutorial) {
-    transition($('game-canvas'));
+    transition(sI('game-canvas'));
     reset();
     if (isTutorial) {
         tutorial = new Tutorial();
@@ -1002,16 +1020,16 @@ function startGame(isTutorial) {
 
 function endGame() {
     running = false;
-    displayScore();
-    transition($('end-screen'));
+    finalScore();
+    transition(sI('end-screen'));
 }
 
 function backToMenu() {
-    transition($('start-screen'));
+    transition(sI('start-screen'));
 }
 
 function restartGame() {
-    transition($('game-canvas'));
+    transition(sI('game-canvas'));
     reset();
 }
 
@@ -1019,21 +1037,50 @@ function resize() {
     can.width = 600;
     can.height = document.body.clientHeight;
     bg = new Background();
+    var stickSize = 120;
+    joystick = new Joystick(stickSize);
+    var ar = can.height / can.width,
+        padX = ~~(stickSize * 1.3),
+        padY;
+    console.log(ar);
+    // widescreen
+    if (ar > 1.77) {
+        padY = ~~(padX * 1.3);
+    } else {
+        padY = padX;
+    }
+    console.log(padX, padY);
+    joystick.pos.set(can.width - padX, can.height - padY);
 }
+
+// cordova event handlers
+function deviceReady() {
+    // trap back button
+    document.addEventListener('backbutton', backPressed);
+}
+
+function backPressed(e) {
+    if (running === true && paused === false) {
+        paused = true;
+        navigator.notification.alert('Game is paused', function() {
+            paused = false;
+        }, 'Paused', 'Resume');
+    } else {
+        navigator.app.exitApp();
+    }
+}
+
+document.addEventListener('deviceready', deviceReady);
 
 window.onresize = resize;
 
 window.onload = function() {
-    currentScreen = $('start-screen');
-    resetScreen($('end-screen'));
-    resetScreen($('game-canvas'));
-    can = $('game-canvas');
+    currentScreen = sI('start-screen');
+    resetScreen(sI('end-screen'));
+    resetScreen(sI('game-canvas'));
+    can = sI('game-canvas');
     ctx = can.getContext('2d');
     resize();
-    var stickSize = 120;
-    joystick = new Joystick(stickSize);
-    var pad = ~~(stickSize * 1.3);
-    joystick.pos.set(can.width - pad, can.height - pad);
 }
 
 window.oncontextmenu = function(e) {
@@ -1045,3 +1092,4 @@ document.ontouchmove = function(e){
     e.preventDefault();
     return false;
 }
+
