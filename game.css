@@ -1,6 +1,11 @@
 * {
     margin: 0;
     padding: 0;
+
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
 }
 
 html, body {
@@ -17,8 +22,8 @@ body {
 }
 
 button {
-    font-size: 2.7em;
-    padding: 0.07em 0.25em;
+    font-size: 3em;
+    padding: 0.1em 0.25em;
     background-color: gray;
     border-radius: 4px;
     box-shadow: 0 0 5px #333;
@@ -31,9 +36,6 @@ button {
     margin-right: auto;
     border: 1px solid black;
     height: 100%;
-}
-.overlay {
-    transition: all 0.4s ease;
 }
 
 .screen {
@@ -60,7 +62,6 @@ button {
     margin-bottom: 1vh;
     font-size: 1.5em;
     color: #777;
-    font-family: monospace;
 }
 
 #start-screen > button {
@@ -94,5 +95,10 @@ button {
     font-weight: bold;
     font-size: 1.5em;
     color: #333;
+}
+
+.setting > label {
+    font-size: 2em;
+    margin-top: 1vh;
 }
 

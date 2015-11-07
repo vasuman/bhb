@@ -1,4 +1,4 @@
-var scoreFactor = 50,
+var scoreFactor = 100,
     thrust = -0.01,
     grav = 0.002,
     maxVel = 0.9,
@@ -125,7 +125,16 @@ Tutorial.prototype = {
             return 1;
         }
     },
-    draw: function() {
+    drawIndicators: function() {
+        switch(this._state) {
+            case TUT_GRAB:
+                if (!this._sinceGrab) {
+                    
+                }
+                break;
+        }
+    },
+    drawMessages: function() {
         var end = Math.Infinity,
             baseX, baseY;
         switch(this._state) {
@@ -958,11 +967,14 @@ function tick() {
     ctx.clearRect(0, 0, can.width, can.height);
     bg.draw();
     if (tutorial) {
-        tutorial.draw();
+        tutorial.drawMessages();
     }
     hero.draw();
     boxes.draw();
     joystick.draw();
+    if (tutorial) {
+        tutorial.drawIndicators();
+    }
     drawScore();
     requestAnimationFrame(tick);
 }
@@ -1000,7 +1012,7 @@ function finalScore() {
 
 function drawScore() {
     ctx.save();
-    ctx.font = '48px Arial';
+    ctx.font = '48px monospace';
     ctx.textAlign = 'end';
     ctx.fillStyle = '#444';
     ctx.shadowColor = '#222';
@@ -1078,6 +1090,7 @@ window.onload = function() {
     currentScreen = sI('start-screen');
     resetScreen(sI('end-screen'));
     resetScreen(sI('game-canvas'));
+    resetScreen(sI('settings-screen'));
     can = sI('game-canvas');
     ctx = can.getContext('2d');
     resize();
